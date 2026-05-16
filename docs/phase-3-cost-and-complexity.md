@@ -72,3 +72,84 @@ This estimate is as an approximate software size. The real code size may differ 
 | Phase 8: Final report and demo | 7 hours |
 | **Total** | **73 hours** |
 
+## 5. Planned vs. Actual Effort
+
+The actual effort will be completed progressively as the project is developed. 
+
+| Phase | Planned Effort | Actual Effort | Difference |
+|---|---:|---:|---:|
+| Phase 1: Idea and scoping | 5 hours | To be completed | To be completed |
+| Phase 2: Requirements | 10 hours | To be completed | To be completed |
+| Phase 3: Cost and complexity | 6 hours | To be completed | To be completed |
+| Phase 4: Design | 12 hours | To be completed | To be completed |
+| Phase 5: Implementation | 35 hours | To be completed | To be completed |
+| Phase 6: CI/CD | 8 hours | To be completed | To be completed |
+| Phase 7: Testing | 10 hours | To be completed | To be completed |
+| Phase 8: Final report and demo | 8 hours | To be completed | To be completed |
+| **Total** | **73 hours** | **To be completed** | **To be completed** |
+
+## 6. Complexity Metrics
+
+Complexity metrics will be measured after the implementation phase starts, because they must be calculated on the actual project code.
+
+The project will track the following metrics:
+
+### 6.1 Cyclomatic Complexity
+
+Cyclomatic complexity measures how many independent execution paths exist in a function or method.
+
+Planned rule:
+
+```text
+Each function should ideally have cyclomatic complexity <= 10.
+```
+
+Functions with higher complexity should be reviewed and simplified if possible.
+
+Expected areas where complexity may appear:
+
+- Sustainability score calculation.
+- Recommended profile generation.
+- Daily and weekly summary logic.
+- Improvement-rate calculation.
+
+### 6.2 Coupling
+
+Coupling measures how strongly different modules depend on each other.
+
+Planned rule:
+
+```text
+The user interface should not directly contain scoring, summary, or AI feedback logic.
+```
+
+The intended module separation is:
+
+- UI module: screens and user interaction.
+- Data model module: activity types, activity logs, scores, and summaries.
+- Scoring module: sustainability score calculation.
+- Summary module: daily and weekly analytics.
+- AI feedback module: preparation of feedback data and generation of suggestions.
+
+### 6.3 Maintainability
+
+Maintainability will be evaluated by checking whether:
+
+- Functions are short and focused.
+- Business logic is separated from the UI.
+- Important logic has unit tests.
+- Names of classes, functions, and variables are understandable.
+- Duplicate logic is avoided.
+
+## 7. Planned Complexity Table
+
+The following table will be completed after implementation.
+
+| Code Area | Metric | Target | Actual Result |
+|---|---|---:|---|
+| Scoring logic | Cyclomatic complexity | <= 10 per function | To be completed |
+| Summary logic | Cyclomatic complexity | <= 10 per function | To be completed |
+| Improvement-rate calculation | Cyclomatic complexity | <= 10 per function | To be completed |
+| UI layer | Coupling | No business logic in UI | To be completed |
+| Data layer | Coupling | Independent from UI | To be completed |
+| AI feedback logic | Coupling | Uses summarized data only | To be completed |
