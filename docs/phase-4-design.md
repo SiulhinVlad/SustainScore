@@ -179,3 +179,150 @@ Planned classes:
 | `FeedbackDataBuilder` | Prepares summarized data for AI feedback. |
 | `AIFeedbackService` | Generates textual improvement suggestions. |
 
+
+## 4. UI Mockups
+
+The following wireframes show the planned main screens. They are simple mockups and may be refined during implementation.
+
+### 4.1 Dashboard Screen
+
+```text
++----------------------------------+
+| SustainScore                     |
++----------------------------------+
+| Today Score                      |
+| 78 / 100                         |
++----------------------------------+
+| Actual vs Recommended Chart      |
+| [hourly bar chart]               |
++----------------------------------+
+| [Log Activity]  [View Summary]   |
+| [Get Feedback]                   |
++----------------------------------+
+```
+
+Purpose:
+
+- Show the user's current sustainability score.
+- Show actual vs. recommended behavior.
+- Provide quick access to main actions.
+
+### 4.2 Activity Logging Screen
+
+```text
++----------------------------------+
+| Log Activity                     |
++----------------------------------+
+| Activity Type                    |
+| [Lighting usage v]               |
+|                                  |
+| Quantity / Duration              |
+| [ 2 lights ]                     |
+|                                  |
+| Time                             |
+| [ 18:00 ]                        |
++----------------------------------+
+| [Save Activity]                  |
++----------------------------------+
+```
+
+Purpose:
+
+- Allow users to log predefined sustainability-related activities.
+- Keep data entry simple and fast.
+
+### 4.3 Summary Screen
+
+```text
++----------------------------------+
+| Daily / Weekly Summary           |
++----------------------------------+
+| Average Score: 78                |
+| Best Period: 10:00 - 12:00       |
+| Highest Consumption: 18:00       |
+| Improvement Rate: +6%            |
++----------------------------------+
+| Summary Chart                    |
+| [daily or weekly chart]          |
++----------------------------------+
+```
+
+Purpose:
+
+- Show the user's sustainability performance over time.
+- Help the user identify patterns and progress.
+
+### 4.4 Feedback Screen
+
+```text
++----------------------------------+
+| Improvement Feedback             |
++----------------------------------+
+| Your highest consumption period  |
+| was in the evening. Try reducing |
+| unnecessary lighting and shorter |
+| appliance usage during that time.|
++----------------------------------+
+| [Back to Dashboard]              |
++----------------------------------+
+```
+
+Purpose:
+
+- Display short, actionable AI-generated suggestions.
+- Keep feedback based on summarized user data.
+
+## 5. Data Model
+
+The data model defines the main information used by the application.
+
+```mermaid
+classDiagram
+    class ActivityType {
+        String id
+        String name
+        String unit
+        Double weight
+        Double recommendedLimit
+    }
+
+    class ActivityLog {
+        String id
+        String activityTypeId
+        String timestamp
+        Double quantity
+        Double duration
+    }
+
+    class SustainabilityScore {
+        String date
+        Int hour
+        Double actualScore
+        Double recommendedScore
+    }
+
+    class RecommendedProfile {
+        String date
+        List recommendedScores
+    }
+
+    class SummaryReport {
+        String period
+        Double averageScore
+        String bestPeriod
+        String worstPeriod
+        Double improvementRate
+    }
+
+    class FeedbackRequest {
+        Double averageScore
+        String highestConsumptionPeriod
+        String mainActivityImpact
+        Double improvementRate
+    }
+
+    ActivityType "1" --> "many" ActivityLog
+    ActivityLog --> SustainabilityScore
+    SustainabilityScore --> SummaryReport
+    SummaryReport --> FeedbackRequest
+```
