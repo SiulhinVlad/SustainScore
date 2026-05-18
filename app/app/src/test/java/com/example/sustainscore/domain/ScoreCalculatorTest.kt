@@ -22,14 +22,16 @@ class ScoreCalculatorTest {
             ActivityLog(
                 id = "1",
                 activityTypeId = "lighting",
-                timestampMillis = 0L,
-                amount = 3.0
+                startTimestampMillis = 0L,
+                quantity = 3.0,
+                durationMinutes = 60
             ),
             ActivityLog(
                 id = "2",
                 activityTypeId = "computer_tv",
-                timestampMillis = 0L,
-                amount = 2.0
+                startTimestampMillis = 0L,
+                quantity = 2.0,
+                durationMinutes = 60
             )
         )
 
@@ -44,8 +46,9 @@ class ScoreCalculatorTest {
             ActivityLog(
                 id = "1",
                 activityTypeId = "washing_machine",
-                timestampMillis = 0L,
-                amount = 20.0
+                startTimestampMillis = 0L,
+                quantity = 20.0,
+                durationMinutes = 60
             )
         )
 
@@ -60,8 +63,9 @@ class ScoreCalculatorTest {
             ActivityLog(
                 id = "1",
                 activityTypeId = "unknown",
-                timestampMillis = 0L,
-                amount = 10.0
+                startTimestampMillis = 0L,
+                quantity = 10.0,
+                durationMinutes = 60
             )
         )
 
@@ -76,14 +80,16 @@ class ScoreCalculatorTest {
             ActivityLog(
                 id = "1",
                 activityTypeId = "lighting",
-                timestampMillis = 0L,
-                amount = 5.0
+                startTimestampMillis = 0L,
+                quantity = 5.0,
+                durationMinutes = 60
             ),
             ActivityLog(
                 id = "2",
                 activityTypeId = "computer_tv",
-                timestampMillis = 0L,
-                amount = 6.0
+                startTimestampMillis = 0L,
+                quantity = 6.0,
+                durationMinutes = 60
             )
         )
 
@@ -98,14 +104,16 @@ class ScoreCalculatorTest {
             ActivityLog(
                 id = "1",
                 activityTypeId = "lighting",
-                timestampMillis = 0L,
-                amount = 5.0
+                startTimestampMillis = 0L,
+                quantity = 5.0,
+                durationMinutes = 60
             ),
             ActivityLog(
                 id = "2",
                 activityTypeId = "lighting",
-                timestampMillis = 0L,
-                amount = 7.0
+                startTimestampMillis = 0L,
+                quantity = 7.0,
+                durationMinutes = 60
             )
         )
 
