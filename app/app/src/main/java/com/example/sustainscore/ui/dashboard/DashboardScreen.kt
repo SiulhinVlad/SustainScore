@@ -10,23 +10,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -36,8 +29,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.sustainscore.domain.DailySummaryGenerator
@@ -45,9 +38,10 @@ import com.example.sustainscore.domain.HourlyScoreCalculator
 import com.example.sustainscore.domain.ScoreCalculator
 import com.example.sustainscore.model.ActivityLog
 import com.example.sustainscore.model.ActivityType
-import com.example.sustainscore.model.ActivityUnit
 import com.example.sustainscore.model.DailySummary
 import com.example.sustainscore.model.PredefinedActivities
+import com.example.sustainscore.ui.logactivity.LogActivityScreen
+import com.example.sustainscore.ui.logactivity.parseTimeOfDay
 import com.example.sustainscore.ui.theme.SustainScoreTheme
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -68,12 +62,19 @@ data class DashboardUiState(
     val hasLogs: Boolean = logCount > 0
 }
 
+private enum class DashboardDestination {
+    Dashboard,
+    LogActivity
+}
+
 @Composable
 fun DashboardRoute(modifier: Modifier = Modifier) {
     val activityTypes = remember { PredefinedActivities.all }
     val today = remember { LocalDate.now() }
     var logs by remember(today) { mutableStateOf(sampleLogsFor(today)) }
-    var showLogActivityDialog by rememberSaveable { mutableStateOf(false) }
+    var currentDestination by rememberSaveable {
+        mutableStateOf(DashboardDestination.Dashboard)
+    }
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
     val uiState = remember(today, logs, activityTypes) {
@@ -84,17 +85,17 @@ fun DashboardRoute(modifier: Modifier = Modifier) {
         )
     }
 
-    DashboardScreen(
-        state = uiState,
-        snackbarHostState = snackbarHostState,
-        onLogActivityClick = { showLogActivityDialog = true },
-        modifier = modifier
-    )
+    when (currentDestination) {
+        DashboardDestination.Dashboard -> DashboardScreen(
+            state = uiState,
+            snackbarHostState = snackbarHostState,
+            onLogActivityClick = { currentDestination = DashboardDestination.LogActivity },
+            modifier = modifier
+        )
 
-    if (showLogActivityDialog) {
-        LogActivityDialog(
+        DashboardDestination.LogActivity -> LogActivityScreen(
             activityTypes = activityTypes,
-            onDismiss = { showLogActivityDialog = false },
+            onBackClick = { currentDestination = DashboardDestination.Dashboard },
             onSave = { activityType, quantity, durationMinutes, startTime ->
                 logs = logs + ActivityLog(
                     id = "log-${System.currentTimeMillis()}",
@@ -103,11 +104,12 @@ fun DashboardRoute(modifier: Modifier = Modifier) {
                     quantity = quantity,
                     durationMinutes = durationMinutes
                 )
-                showLogActivityDialog = false
+                currentDestination = DashboardDestination.Dashboard
                 coroutineScope.launch {
                     snackbarHostState.showSnackbar("${activityType.name} added to today")
                 }
-            }
+            },
+            modifier = modifier
         )
     }
 }
@@ -122,13 +124,16 @@ internal fun buildDashboardUiState(
         activityTypes = activityTypes,
         hourlyScoreCalculator = HourlyScoreCalculator(scoreCalculator)
     )
+    val currentScore = scoreCalculator.calculateActualScore(logs)
+    val rawRecommendedScore = scoreCalculator.calculateRecommendedScore(logs)
+    val recommendedScore = maxOf(rawRecommendedScore, currentScore)
 
     return DashboardUiState(
         displayDate = date.format(
             DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.getDefault())
         ),
-        currentScore = scoreCalculator.calculateActualScore(logs),
-        recommendedScore = scoreCalculator.calculateRecommendedScore(logs),
+        currentScore = currentScore,
+        recommendedScore = recommendedScore,
         dailySummary = dailySummaryGenerator.generate(
             date = date.format(DateTimeFormatter.ISO_DATE),
             logs = logs
@@ -172,7 +177,8 @@ fun DashboardScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding),
+                .padding(innerPadding)
+                .testTag("dashboard_list"),
             state = rememberLazyListState(),
             contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -189,7 +195,9 @@ fun DashboardScreen(
             item {
                 Button(
                     onClick = onLogActivityClick,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("dashboard_log_activity_button"),
                     contentPadding = PaddingValues(vertical = 14.dp)
                 ) {
                     Text(text = "Log Activity")
@@ -347,15 +355,11 @@ private fun DailySummaryCard(state: DashboardUiState) {
 
             if (!state.hasLogs) {
                 Text(
-                    text = "Once you log activities, this space will show your average score, best hour, and biggest sustainability impact.",
+                    text = "Once you log activities, this space will show your best hour and biggest sustainability impact.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             } else {
-                SummaryMetric(
-                    label = "Average score",
-                    value = "${formatDecimal(state.dailySummary.averageScore)} / 100"
-                )
                 SummaryMetric(
                     label = "Best hour",
                     value = state.dailySummary.bestHour?.toHourLabel() ?: "Not available yet"
@@ -395,140 +399,6 @@ private fun SummaryMetric(label: String, value: String) {
             fontWeight = FontWeight.Medium
         )
     }
-}
-
-@Composable
-private fun LogActivityDialog(
-    activityTypes: List<ActivityType>,
-    onDismiss: () -> Unit,
-    onSave: (ActivityType, Double, Int, String) -> Unit
-) {
-    var selectedActivityId by rememberSaveable { mutableStateOf(activityTypes.first().id) }
-    var quantity by rememberSaveable { mutableStateOf("") }
-    var duration by rememberSaveable { mutableStateOf("") }
-    var startTime by rememberSaveable { mutableStateOf("") }
-    var expanded by remember { mutableStateOf(false) }
-    val selectedActivity = activityTypes.first { it.id == selectedActivityId }
-    val parsedQuantity = quantity.toDoubleOrNull()
-    val parsedDurationMinutes = parseDurationMinutes(duration)
-    val quantityIsValid = parsedQuantity != null && parsedQuantity > 0.0
-    val durationIsValid = parsedDurationMinutes != null && parsedDurationMinutes > 0
-    val startTimeIsValid = isValidTimeOfDay(startTime)
-    val formIsValid = quantityIsValid && durationIsValid && startTimeIsValid
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(text = "Log Activity") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text(
-                    text = "Add a domestic activity and the dashboard will update immediately.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = "Activity type",
-                        style = MaterialTheme.typography.labelLarge
-                    )
-                    OutlinedButton(
-                        onClick = { expanded = true },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            text = selectedActivity.name,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Text(
-                            text = selectedActivity.unit.label(),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    DropdownMenu(
-                        expanded = expanded,
-                        onDismissRequest = { expanded = false }
-                    ) {
-                        activityTypes.forEach { activity ->
-                            DropdownMenuItem(
-                                text = { Text(activity.name) },
-                                onClick = {
-                                    selectedActivityId = activity.id
-                                    expanded = false
-                                }
-                            )
-                        }
-                    }
-                }
-
-                OutlinedTextField(
-                    value = quantity,
-                    onValueChange = { quantity = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Quantity") },
-                    placeholder = { Text("Example: 2") },
-                    supportingText = {
-                        Text(
-                            text = "Recommended quantity-hours: ${
-                                formatDecimal(selectedActivity.recommendedLimit)
-                            }."
-                        )
-                    },
-                    isError = quantity.isNotBlank() && !quantityIsValid,
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Decimal
-                    )
-                )
-
-                OutlinedTextField(
-                    value = duration,
-                    onValueChange = { duration = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Duration") },
-                    placeholder = { Text("HH:mm, e.g. 02:30") },
-                    isError = duration.isNotBlank() && !durationIsValid,
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Number
-                    )
-                )
-
-                OutlinedTextField(
-                    value = startTime,
-                    onValueChange = { startTime = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Start time") },
-                    placeholder = { Text("HH:mm, e.g. 18:00") },
-                    isError = startTime.isNotBlank() && !startTimeIsValid,
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Number
-                    )
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    onSave(
-                        selectedActivity,
-                        parsedQuantity ?: 0.0,
-                        parsedDurationMinutes ?: 0,
-                        startTime
-                    )
-                },
-                enabled = formIsValid
-            ) {
-                Text("Save")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
 }
 
 internal fun buildRecommendationText(state: DashboardUiState): String {
@@ -578,49 +448,13 @@ private fun timestampForHour(date: LocalDate, hour: Int): Long {
 }
 
 private fun timestampForTime(date: LocalDate, timeText: String): Long {
-    val parts = timeText.split(":")
-    val hour = parts[0].toInt()
-    val minute = parts[1].toInt()
+    val (hour, minute) = requireNotNull(parseTimeOfDay(timeText)) {
+        "Invalid time input: $timeText"
+    }
     return LocalDateTime.of(date.year, date.monthValue, date.dayOfMonth, hour, minute)
         .atZone(ZoneId.systemDefault())
         .toInstant()
         .toEpochMilli()
-}
-
-private fun parseDurationMinutes(durationText: String): Int? {
-    val parts = durationText.split(":")
-    if (parts.size != 2) {
-        return null
-    }
-
-    val hours = parts[0].toIntOrNull() ?: return null
-    val minutes = parts[1].toIntOrNull() ?: return null
-
-    if (hours < 0 || minutes !in 0..59) {
-        return null
-    }
-
-    return hours * 60 + minutes
-}
-
-private fun isValidTimeOfDay(timeText: String): Boolean {
-    val parts = timeText.split(":")
-    if (parts.size != 2) {
-        return false
-    }
-
-    val hour = parts[0].toIntOrNull() ?: return false
-    val minute = parts[1].toIntOrNull() ?: return false
-
-    return hour in 0..23 && minute in 0..59
-}
-
-private fun ActivityUnit.label(): String {
-    return when (this) {
-        ActivityUnit.COUNT -> "count"
-        ActivityUnit.MINUTES -> "minutes"
-        ActivityUnit.HOURS -> "hours"
-    }
 }
 
 private fun Int.toHourLabel(): String {

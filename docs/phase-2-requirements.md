@@ -39,7 +39,7 @@ The chart shall help users identify high-consumption periods and understand thei
 
 The application shall provide a daily summary of the user's sustainability performance.
 
-The daily summary shall include the average score, high-consumption periods, and main activities affecting the score.
+The daily summary shall include high-consumption periods and main activities affecting the score.
 
 ### FR6: Weekly Summary
 
@@ -141,7 +141,6 @@ As a user, I want to view a daily summary so that I can understand my sustainabi
 
 Acceptance criteria:
 
-- The summary shows the average score.
 - The summary identifies high-consumption periods.
 - The summary highlights the activities that most affected the score.
 

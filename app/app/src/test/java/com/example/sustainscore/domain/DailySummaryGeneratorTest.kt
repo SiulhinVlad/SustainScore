@@ -28,7 +28,6 @@ class DailySummaryGeneratorTest {
         assertEquals(
             DailySummary(
                 date = "2026-05-18",
-                averageScore = 100.0,
                 bestHour = null,
                 worstHour = null,
                 highestImpactActivityName = null
@@ -38,7 +37,7 @@ class DailySummaryGeneratorTest {
     }
 
     @Test
-    fun generatesAverageBestWorstAndHighestImpactActivity() {
+    fun generatesBestWorstAndHighestImpactActivity() {
         val logs = listOf(
             ActivityLog(
                 id = "1",
@@ -69,7 +68,6 @@ class DailySummaryGeneratorTest {
         )
 
         assertEquals("2026-05-18", summary.date)
-        assertEquals(88.0, summary.averageScore, 0.001)
         assertEquals(8, summary.bestHour)
         assertEquals(9, summary.worstHour)
         assertEquals("Washing Machine", summary.highestImpactActivityName)

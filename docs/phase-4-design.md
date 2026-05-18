@@ -124,7 +124,6 @@ The summary module creates daily and weekly summaries.
 
 Main responsibilities:
 
-- Calculate average score.
 - Identify high-consumption periods.
 - Identify best and worst periods.
 - Calculate improvement rate.
@@ -308,14 +307,14 @@ classDiagram
 
     class SummaryReport {
         String period
-        Double averageScore
+        Double currentScore
         String bestPeriod
         String worstPeriod
         Double improvementRate
     }
 
     class FeedbackRequest {
-        Double averageScore
+        Double currentScore
         String highestConsumptionPeriod
         String mainActivityImpact
         Double improvementRate
