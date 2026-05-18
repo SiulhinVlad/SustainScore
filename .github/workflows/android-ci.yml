@@ -10,7 +10,7 @@ on:
 
 jobs:
   build:
-    name: Build Android project
+    name: Build and test Android project
     runs-on: ubuntu-latest
 
     steps:
@@ -29,6 +29,10 @@ jobs:
       - name: Make Gradle wrapper executable
         working-directory: app
         run: chmod +x ./gradlew
+
+      - name: Run unit tests
+        working-directory: app
+        run: ./gradlew test
 
       - name: Build project
         working-directory: app
