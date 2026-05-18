@@ -43,7 +43,6 @@ class DashboardUiStateBuilderTest {
         assertEquals(76.0, state.recommendedScore, 0.001)
         assertEquals(3, state.logCount)
         assertEquals(3, state.trackedActivityCount)
-        assertEquals(91.333, state.dailySummary.averageScore, 0.001)
         assertEquals(7, state.dailySummary.bestHour)
         assertEquals(13, state.dailySummary.worstHour)
         assertEquals("Washing Machine", state.dailySummary.highestImpactActivityName)
@@ -60,10 +59,29 @@ class DashboardUiStateBuilderTest {
         assertEquals(100.0, state.recommendedScore, 0.001)
         assertEquals(0, state.logCount)
         assertEquals(0, state.trackedActivityCount)
-        assertEquals(100.0, state.dailySummary.averageScore, 0.001)
         assertNull(state.dailySummary.bestHour)
         assertNull(state.dailySummary.worstHour)
         assertNull(state.dailySummary.highestImpactActivityName)
+    }
+
+    @Test
+    fun buildDashboardUiStateRaisesRecommendedScoreToMatchCurrentWhenUserBeatsTarget() {
+        val date = LocalDate.of(2026, 5, 18)
+        val state = buildDashboardUiState(
+            date = date,
+            logs = listOf(
+                ActivityLog(
+                    id = "1",
+                    activityTypeId = "lighting",
+                    startTimestampMillis = timestampForHour(date, 8),
+                    quantity = 1.0,
+                    durationMinutes = 60
+                )
+            )
+        )
+
+        assertEquals(98.0, state.currentScore, 0.001)
+        assertEquals(98.0, state.recommendedScore, 0.001)
     }
 
     @Test
@@ -135,7 +153,6 @@ class DashboardUiStateBuilderTest {
             recommendedScore = 85.0,
             dailySummary = com.example.sustainscore.model.DailySummary(
                 date = "2026-05-18",
-                averageScore = 70.0,
                 bestHour = 8,
                 worstHour = 20,
                 highestImpactActivityName = null

@@ -38,7 +38,7 @@ The app displays the user's actual behavior alongside a recommended sustainable 
 
 ### 4. Daily and Weekly Summaries
 
-The app provides summary views showing the user's average score, high-consumption periods, and progress over time.
+The app provides summary views showing the user's score, high-consumption periods, and progress over time.
 
 ### 5. AI-Generated Feedback
 

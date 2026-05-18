@@ -15,7 +15,6 @@ class DailySummaryGenerator(
         if (logs.isEmpty()) {
             return DailySummary(
                 date = date,
-                averageScore = 100.0,
                 bestHour = null,
                 worstHour = null,
                 highestImpactActivityName = null
@@ -29,7 +28,6 @@ class DailySummaryGenerator(
 
         val bestScore = hourlyScores.maxBy { it.actualScore }
         val worstScore = hourlyScores.minBy { it.actualScore }
-        val averageScore = hourlyScores.map { it.actualScore }.average()
         val highestImpactActivity = logs
             .mapNotNull { log ->
                 val activityType = activityTypeById[log.activityTypeId] ?: return@mapNotNull null
@@ -40,7 +38,6 @@ class DailySummaryGenerator(
 
         return DailySummary(
             date = date,
-            averageScore = averageScore,
             bestHour = bestScore.hour,
             worstHour = worstScore.hour,
             highestImpactActivityName = highestImpactActivity?.name
