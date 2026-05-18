@@ -17,20 +17,23 @@ class DashboardUiStateBuilderTest {
             ActivityLog(
                 id = "1",
                 activityTypeId = "lighting",
-                timestampMillis = timestampForHour(date, 7),
-                amount = 3.0
+                startTimestampMillis = timestampForHour(date, 7),
+                quantity = 3.0,
+                durationMinutes = 60
             ),
             ActivityLog(
                 id = "2",
                 activityTypeId = "washing_machine",
-                timestampMillis = timestampForHour(date, 13),
-                amount = 1.0
+                startTimestampMillis = timestampForHour(date, 13),
+                quantity = 1.0,
+                durationMinutes = 60
             ),
             ActivityLog(
                 id = "3",
                 activityTypeId = "computer_tv",
-                timestampMillis = timestampForHour(date, 18),
-                amount = 2.0
+                startTimestampMillis = timestampForHour(date, 18),
+                quantity = 2.0,
+                durationMinutes = 60
             )
         )
 
@@ -86,8 +89,9 @@ class DashboardUiStateBuilderTest {
                 ActivityLog(
                     id = "1",
                     activityTypeId = "washing_machine",
-                    timestampMillis = timestampForHour(LocalDate.of(2026, 5, 18), 13),
-                    amount = 2.0
+                    startTimestampMillis = timestampForHour(LocalDate.of(2026, 5, 18), 13),
+                    quantity = 2.0,
+                    durationMinutes = 60
                 )
             )
         )
@@ -108,8 +112,9 @@ class DashboardUiStateBuilderTest {
                 ActivityLog(
                     id = "1",
                     activityTypeId = "lighting",
-                    timestampMillis = timestampForHour(LocalDate.of(2026, 5, 18), 8),
-                    amount = 1.0
+                    startTimestampMillis = timestampForHour(LocalDate.of(2026, 5, 18), 8),
+                    quantity = 1.0,
+                    durationMinutes = 60
                 )
             )
         )

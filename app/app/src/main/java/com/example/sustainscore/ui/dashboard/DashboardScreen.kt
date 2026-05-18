@@ -95,12 +95,13 @@ fun DashboardRoute(modifier: Modifier = Modifier) {
         LogActivityDialog(
             activityTypes = activityTypes,
             onDismiss = { showLogActivityDialog = false },
-            onSave = { activityType, amount ->
+            onSave = { activityType, quantity, durationMinutes, startTime ->
                 logs = logs + ActivityLog(
                     id = "log-${System.currentTimeMillis()}",
                     activityTypeId = activityType.id,
-                    timestampMillis = System.currentTimeMillis(),
-                    amount = amount
+                    startTimestampMillis = timestampForTime(today, startTime),
+                    quantity = quantity,
+                    durationMinutes = durationMinutes
                 )
                 showLogActivityDialog = false
                 coroutineScope.launch {
@@ -400,14 +401,20 @@ private fun SummaryMetric(label: String, value: String) {
 private fun LogActivityDialog(
     activityTypes: List<ActivityType>,
     onDismiss: () -> Unit,
-    onSave: (ActivityType, Double) -> Unit
+    onSave: (ActivityType, Double, Int, String) -> Unit
 ) {
     var selectedActivityId by rememberSaveable { mutableStateOf(activityTypes.first().id) }
-    var amount by rememberSaveable { mutableStateOf("") }
+    var quantity by rememberSaveable { mutableStateOf("") }
+    var duration by rememberSaveable { mutableStateOf("") }
+    var startTime by rememberSaveable { mutableStateOf("") }
     var expanded by remember { mutableStateOf(false) }
     val selectedActivity = activityTypes.first { it.id == selectedActivityId }
-    val parsedAmount = amount.toDoubleOrNull()
-    val amountIsValid = parsedAmount != null && parsedAmount > 0.0
+    val parsedQuantity = quantity.toDoubleOrNull()
+    val parsedDurationMinutes = parseDurationMinutes(duration)
+    val quantityIsValid = parsedQuantity != null && parsedQuantity > 0.0
+    val durationIsValid = parsedDurationMinutes != null && parsedDurationMinutes > 0
+    val startTimeIsValid = isValidTimeOfDay(startTime)
+    val formIsValid = quantityIsValid && durationIsValid && startTimeIsValid
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -455,30 +462,63 @@ private fun LogActivityDialog(
                 }
 
                 OutlinedTextField(
-                    value = amount,
-                    onValueChange = { amount = it },
+                    value = quantity,
+                    onValueChange = { quantity = it },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Amount") },
-                    placeholder = { Text("Enter ${selectedActivity.unit.label()}") },
+                    label = { Text("Quantity") },
+                    placeholder = { Text("Example: 2") },
                     supportingText = {
                         Text(
-                            text = "Recommended daily limit: ${
+                            text = "Recommended quantity-hours: ${
                                 formatDecimal(selectedActivity.recommendedLimit)
-                            } ${selectedActivity.unit.label()}."
+                            }."
                         )
                     },
-                    isError = amount.isNotBlank() && !amountIsValid,
+                    isError = quantity.isNotBlank() && !quantityIsValid,
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Decimal
+                    )
+                )
+
+                OutlinedTextField(
+                    value = duration,
+                    onValueChange = { duration = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Duration") },
+                    placeholder = { Text("HH:mm, e.g. 02:30") },
+                    isError = duration.isNotBlank() && !durationIsValid,
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Number
+                    )
+                )
+
+                OutlinedTextField(
+                    value = startTime,
+                    onValueChange = { startTime = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Start time") },
+                    placeholder = { Text("HH:mm, e.g. 18:00") },
+                    isError = startTime.isNotBlank() && !startTimeIsValid,
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Number
                     )
                 )
             }
         },
         confirmButton = {
             TextButton(
-                onClick = { onSave(selectedActivity, parsedAmount ?: 0.0) },
-                enabled = amountIsValid
+                onClick = {
+                    onSave(
+                        selectedActivity,
+                        parsedQuantity ?: 0.0,
+                        parsedDurationMinutes ?: 0,
+                        startTime
+                    )
+                },
+                enabled = formIsValid
             ) {
                 Text("Save")
             }
@@ -509,20 +549,23 @@ private fun sampleLogsFor(date: LocalDate): List<ActivityLog> {
         ActivityLog(
             id = "sample-1",
             activityTypeId = "lighting",
-            timestampMillis = timestampForHour(date, 7),
-            amount = 3.0
+            startTimestampMillis = timestampForHour(date, 7),
+            quantity = 3.0,
+            durationMinutes = 60
         ),
         ActivityLog(
             id = "sample-2",
             activityTypeId = "washing_machine",
-            timestampMillis = timestampForHour(date, 13),
-            amount = 1.0
+            startTimestampMillis = timestampForHour(date, 13),
+            quantity = 1.0,
+            durationMinutes = 60
         ),
         ActivityLog(
             id = "sample-3",
             activityTypeId = "computer_tv",
-            timestampMillis = timestampForHour(date, 18),
-            amount = 2.0
+            startTimestampMillis = timestampForHour(date, 18),
+            quantity = 2.0,
+            durationMinutes = 60
         )
     )
 }
@@ -532,6 +575,44 @@ private fun timestampForHour(date: LocalDate, hour: Int): Long {
         .atZone(ZoneId.systemDefault())
         .toInstant()
         .toEpochMilli()
+}
+
+private fun timestampForTime(date: LocalDate, timeText: String): Long {
+    val parts = timeText.split(":")
+    val hour = parts[0].toInt()
+    val minute = parts[1].toInt()
+    return LocalDateTime.of(date.year, date.monthValue, date.dayOfMonth, hour, minute)
+        .atZone(ZoneId.systemDefault())
+        .toInstant()
+        .toEpochMilli()
+}
+
+private fun parseDurationMinutes(durationText: String): Int? {
+    val parts = durationText.split(":")
+    if (parts.size != 2) {
+        return null
+    }
+
+    val hours = parts[0].toIntOrNull() ?: return null
+    val minutes = parts[1].toIntOrNull() ?: return null
+
+    if (hours < 0 || minutes !in 0..59) {
+        return null
+    }
+
+    return hours * 60 + minutes
+}
+
+private fun isValidTimeOfDay(timeText: String): Boolean {
+    val parts = timeText.split(":")
+    if (parts.size != 2) {
+        return false
+    }
+
+    val hour = parts[0].toIntOrNull() ?: return false
+    val minute = parts[1].toIntOrNull() ?: return false
+
+    return hour in 0..23 && minute in 0..59
 }
 
 private fun ActivityUnit.label(): String {

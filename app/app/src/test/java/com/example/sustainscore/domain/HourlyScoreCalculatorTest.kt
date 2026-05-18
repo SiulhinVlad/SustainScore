@@ -19,14 +19,16 @@ class HourlyScoreCalculatorTest {
             ActivityLog(
                 id = "1",
                 activityTypeId = "lighting",
-                timestampMillis = timestampForHour(9),
-                amount = 3.0
+                startTimestampMillis = timestampForHour(9),
+                quantity = 3.0,
+                durationMinutes = 60
             ),
             ActivityLog(
                 id = "2",
                 activityTypeId = "computer_tv",
-                timestampMillis = timestampForHour(10),
-                amount = 4.0
+                startTimestampMillis = timestampForHour(10),
+                quantity = 4.0,
+                durationMinutes = 60
             )
         )
 

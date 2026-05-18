@@ -43,20 +43,23 @@ class DailySummaryGeneratorTest {
             ActivityLog(
                 id = "1",
                 activityTypeId = "lighting",
-                timestampMillis = timestampForHour(8),
-                amount = 2.0
+                startTimestampMillis = timestampForHour(8),
+                quantity = 2.0,
+                durationMinutes = 60
             ),
             ActivityLog(
                 id = "2",
                 activityTypeId = "computer_tv",
-                timestampMillis = timestampForHour(9),
-                amount = 2.0
+                startTimestampMillis = timestampForHour(9),
+                quantity = 2.0,
+                durationMinutes = 60
             ),
             ActivityLog(
                 id = "3",
                 activityTypeId = "washing_machine",
-                timestampMillis = timestampForHour(9),
-                amount = 1.0
+                startTimestampMillis = timestampForHour(9),
+                quantity = 1.0,
+                durationMinutes = 60
             )
         )
 
@@ -78,14 +81,16 @@ class DailySummaryGeneratorTest {
             ActivityLog(
                 id = "1",
                 activityTypeId = "unknown",
-                timestampMillis = timestampForHour(8),
-                amount = 100.0
+                startTimestampMillis = timestampForHour(8),
+                quantity = 100.0,
+                durationMinutes = 60
             ),
             ActivityLog(
                 id = "2",
                 activityTypeId = "lighting",
-                timestampMillis = timestampForHour(8),
-                amount = 1.0
+                startTimestampMillis = timestampForHour(8),
+                quantity = 1.0,
+                durationMinutes = 60
             )
         )
 
@@ -103,8 +108,9 @@ class DailySummaryGeneratorTest {
             ActivityLog(
                 id = "1",
                 activityTypeId = "unknown",
-                timestampMillis = timestampForHour(8),
-                amount = 100.0
+                startTimestampMillis = timestampForHour(8),
+                quantity = 100.0,
+                durationMinutes = 60
             )
         )
 

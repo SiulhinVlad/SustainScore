@@ -22,7 +22,7 @@ class DailySummaryGenerator(
             )
         }
 
-        val activeHours = logs.map { it.hourOfDay() }.distinct().sorted()
+        val activeHours = logs.flatMap { it.activeHours() }.distinct().sorted()
         val hourlyScores = activeHours.map { hour ->
             hourlyScoreCalculator.calculate(date, hour, logs)
         }
@@ -33,7 +33,7 @@ class DailySummaryGenerator(
         val highestImpactActivity = logs
             .mapNotNull { log ->
                 val activityType = activityTypeById[log.activityTypeId] ?: return@mapNotNull null
-                activityType to log.amount * activityType.weight
+                activityType to log.quantityHours * activityType.weight
             }
             .maxByOrNull { it.second }
             ?.first
@@ -47,9 +47,25 @@ class DailySummaryGenerator(
         )
     }
 
-    private fun ActivityLog.hourOfDay(): Int {
-        return Calendar.getInstance()
-            .apply { timeInMillis = timestampMillis }
-            .get(Calendar.HOUR_OF_DAY)
+    private fun ActivityLog.activeHours(): List<Int> {
+        val activeHours = mutableListOf<Int>()
+        val logEndMillis = startTimestampMillis + durationMinutes * ONE_MINUTE_MILLIS
+        val calendar = Calendar.getInstance().apply {
+            timeInMillis = startTimestampMillis
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+
+        while (calendar.timeInMillis < logEndMillis) {
+            activeHours.add(calendar.get(Calendar.HOUR_OF_DAY))
+            calendar.add(Calendar.HOUR_OF_DAY, 1)
+        }
+
+        return activeHours
+    }
+
+    companion object {
+        private const val ONE_MINUTE_MILLIS = 60_000L
     }
 }

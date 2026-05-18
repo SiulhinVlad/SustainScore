@@ -14,7 +14,7 @@ class ScoreCalculator(
             if (activityType == null) {
                 0.0
             } else {
-                log.amount * activityType.weight
+                log.quantityHours * activityType.weight
             }
         }
 
