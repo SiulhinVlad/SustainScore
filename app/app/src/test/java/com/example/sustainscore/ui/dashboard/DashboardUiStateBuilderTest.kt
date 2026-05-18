@@ -7,6 +7,7 @@ import org.junit.Test
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
+import kotlin.math.exp
 
 class DashboardUiStateBuilderTest {
 
@@ -39,8 +40,8 @@ class DashboardUiStateBuilderTest {
 
         val state = buildDashboardUiState(date, logs)
 
-        assertEquals(74.0, state.currentScore, 0.001)
-        assertEquals(76.0, state.recommendedScore, 0.001)
+        assertEquals(expectedScoreFromImpact(26.0), state.currentScore, 0.001)
+        assertEquals(expectedScoreFromImpact(24.0), state.recommendedScore, 0.001)
         assertEquals(3, state.logCount)
         assertEquals(3, state.trackedActivityCount)
         assertEquals(7, state.dailySummary.bestHour)
@@ -80,8 +81,8 @@ class DashboardUiStateBuilderTest {
             )
         )
 
-        assertEquals(98.0, state.currentScore, 0.001)
-        assertEquals(98.0, state.recommendedScore, 0.001)
+        assertEquals(expectedScoreFromImpact(2.0), state.currentScore, 0.001)
+        assertEquals(expectedScoreFromImpact(2.0), state.recommendedScore, 0.001)
     }
 
     @Test
@@ -174,5 +175,9 @@ class DashboardUiStateBuilderTest {
             .atZone(ZoneId.systemDefault())
             .toInstant()
             .toEpochMilli()
+    }
+
+    private fun expectedScoreFromImpact(impact: Double): Double {
+        return 100.0 * exp(-impact / 100.0)
     }
 }

@@ -2,6 +2,7 @@ package com.example.sustainscore.domain
 
 import com.example.sustainscore.model.ActivityLog
 import com.example.sustainscore.model.ActivityType
+import kotlin.math.exp
 
 class ScoreCalculator(
     private val activityTypes: List<ActivityType>
@@ -9,7 +10,21 @@ class ScoreCalculator(
     private val activityTypeById = activityTypes.associateBy { it.id }
 
     fun calculateActualScore(logs: List<ActivityLog>): Double {
-        val totalWeightedConsumption = logs.sumOf { log ->
+        val totalWeightedConsumption = calculateActualImpact(logs)
+
+        return scoreFromWeightedConsumption(totalWeightedConsumption)
+    }
+
+    fun calculateRecommendedScore(logs: List<ActivityLog>): Double {
+        val totalRecommendedConsumption = calculateRecommendedImpact(logs)
+
+        return scoreFromWeightedConsumption(totalRecommendedConsumption)
+    }
+
+    fun calculate(logs: List<ActivityLog>): Double = calculateActualScore(logs)
+
+    internal fun calculateActualImpact(logs: List<ActivityLog>): Double {
+        return logs.sumOf { log ->
             val activityType = activityTypeById[log.activityTypeId]
             if (activityType == null) {
                 0.0
@@ -17,22 +32,25 @@ class ScoreCalculator(
                 log.quantityHours * activityType.weight
             }
         }
-
-        return scoreFromWeightedConsumption(totalWeightedConsumption)
     }
 
-    fun calculateRecommendedScore(logs: List<ActivityLog>): Double {
-        val totalRecommendedConsumption = logs
-            .mapNotNull { log -> activityTypeById[log.activityTypeId] }
-            .distinctBy { it.id }
-            .sumOf { activityType -> activityType.recommendedLimit * activityType.weight }
-
-        return scoreFromWeightedConsumption(totalRecommendedConsumption)
+    internal fun calculateRecommendedImpact(logs: List<ActivityLog>): Double {
+        return logs.sumOf { log ->
+            val activityType = activityTypeById[log.activityTypeId]
+            if (activityType == null) {
+                0.0
+            } else {
+                val sustainableQuantity = minOf(log.quantity, activityType.recommendedLimit)
+                sustainableQuantity * log.durationHours * activityType.weight
+            }
+        }
     }
-
-    fun calculate(logs: List<ActivityLog>): Double = calculateActualScore(logs)
 
     private fun scoreFromWeightedConsumption(weightedConsumption: Double): Double {
-        return (100.0 - weightedConsumption).coerceIn(0.0, 100.0)
+        return 100.0 * exp(-weightedConsumption / ScoreScale)
+    }
+
+    private companion object {
+        private const val ScoreScale = 100.0
     }
 }

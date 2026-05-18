@@ -6,6 +6,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.time.LocalDateTime
 import java.time.ZoneId
+import kotlin.math.exp
 
 class HourlyScoreCalculatorTest {
 
@@ -40,8 +41,8 @@ class HourlyScoreCalculatorTest {
 
         assertEquals("2026-05-17", score.date)
         assertEquals(9, score.hour)
-        assertEquals(94.0, score.actualScore, 0.001)
-        assertEquals(96.0, score.recommendedScore, 0.001)
+        assertEquals(expectedScoreFromImpact(6.0), score.actualScore, 0.001)
+        assertEquals(expectedScoreFromImpact(4.0), score.recommendedScore, 0.001)
     }
 
     private fun timestampForHour(hour: Int): Long {
@@ -49,5 +50,9 @@ class HourlyScoreCalculatorTest {
             .atZone(ZoneId.systemDefault())
             .toInstant()
             .toEpochMilli()
+    }
+
+    private fun expectedScoreFromImpact(impact: Double): Double {
+        return 100.0 * exp(-impact / 100.0)
     }
 }
