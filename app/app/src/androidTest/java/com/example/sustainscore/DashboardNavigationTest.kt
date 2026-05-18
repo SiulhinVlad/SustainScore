@@ -38,6 +38,9 @@ class DashboardNavigationTest {
             .assertIsDisplayed()
             .performClick()
 
+        composeRule.onNodeWithTag("dashboard_list")
+            .performScrollToNode(hasText("Daily summary"))
+
         composeRule.onNodeWithText("Daily summary")
             .assertIsDisplayed()
     }
@@ -68,7 +71,7 @@ class DashboardNavigationTest {
         composeRule.onNodeWithText("Dashboard")
             .assertIsDisplayed()
 
-        composeRule.onNodeWithText("72 / 100")
+        composeRule.onNodeWithText("76 / 100")
             .assertIsDisplayed()
     }
 }

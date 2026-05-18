@@ -23,6 +23,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -67,20 +68,32 @@ private enum class DashboardDestination {
     LogActivity
 }
 
+internal val DashboardDateFormatter: DateTimeFormatter =
+    DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.getDefault())
+
 @Composable
 fun DashboardRoute(modifier: Modifier = Modifier) {
     val activityTypes = remember { PredefinedActivities.all }
-    val today = remember { LocalDate.now() }
-    var logs by remember(today) { mutableStateOf(sampleLogsFor(today)) }
+    val anchorDate = remember { LocalDate.now() }
+    var allLogs by remember(anchorDate) { mutableStateOf(sampleLogsFor(anchorDate)) }
+    var selectedDateEpochDay by rememberSaveable {
+        mutableLongStateOf(anchorDate.toEpochDay())
+    }
     var currentDestination by rememberSaveable {
         mutableStateOf(DashboardDestination.Dashboard)
     }
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
-    val uiState = remember(today, logs, activityTypes) {
+    val selectedDate = remember(selectedDateEpochDay) {
+        LocalDate.ofEpochDay(selectedDateEpochDay)
+    }
+    val selectedDateLogs = remember(selectedDate, allLogs) {
+        logsForDate(allLogs, selectedDate)
+    }
+    val uiState = remember(selectedDate, selectedDateLogs, activityTypes) {
         buildDashboardUiState(
-            date = today,
-            logs = logs,
+            date = selectedDate,
+            logs = selectedDateLogs,
             activityTypes = activityTypes
         )
     }
@@ -88,8 +101,15 @@ fun DashboardRoute(modifier: Modifier = Modifier) {
     when (currentDestination) {
         DashboardDestination.Dashboard -> DashboardScreen(
             state = uiState,
+            selectedDate = selectedDate,
+            anchorDate = anchorDate,
+            allLogs = allLogs,
+            activityTypes = activityTypes,
             snackbarHostState = snackbarHostState,
             onLogActivityClick = { currentDestination = DashboardDestination.LogActivity },
+            onSelectedDateChange = { date ->
+                selectedDateEpochDay = date.toEpochDay()
+            },
             modifier = modifier
         )
 
@@ -97,10 +117,10 @@ fun DashboardRoute(modifier: Modifier = Modifier) {
             activityTypes = activityTypes,
             onBackClick = { currentDestination = DashboardDestination.Dashboard },
             onSave = { activityType, quantity, durationMinutes, startTime ->
-                logs = logs + ActivityLog(
+                allLogs = allLogs + ActivityLog(
                     id = "log-${System.currentTimeMillis()}",
                     activityTypeId = activityType.id,
-                    startTimestampMillis = timestampForTime(today, startTime),
+                    startTimestampMillis = timestampForTime(selectedDate, startTime),
                     quantity = quantity,
                     durationMinutes = durationMinutes
                 )
@@ -129,9 +149,7 @@ internal fun buildDashboardUiState(
     val recommendedScore = maxOf(rawRecommendedScore, currentScore)
 
     return DashboardUiState(
-        displayDate = date.format(
-            DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.getDefault())
-        ),
+        displayDate = date.format(DashboardDateFormatter),
         currentScore = currentScore,
         recommendedScore = recommendedScore,
         dailySummary = dailySummaryGenerator.generate(
@@ -147,8 +165,13 @@ internal fun buildDashboardUiState(
 @Composable
 fun DashboardScreen(
     state: DashboardUiState,
+    selectedDate: LocalDate,
+    anchorDate: LocalDate,
+    allLogs: List<ActivityLog>,
+    activityTypes: List<ActivityType>,
     snackbarHostState: SnackbarHostState,
     onLogActivityClick: () -> Unit,
+    onSelectedDateChange: (LocalDate) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Scaffold(
@@ -190,6 +213,15 @@ fun DashboardScreen(
                 ScoreSection(state = state)
             }
             item {
+                DailyUsageChartCard(
+                    anchorDate = anchorDate,
+                    selectedDate = selectedDate,
+                    logs = allLogs,
+                    activityTypes = activityTypes,
+                    onSelectedDateChange = onSelectedDateChange
+                )
+            }
+            item {
                 DailySummaryCard(state = state)
             }
             item {
@@ -225,7 +257,7 @@ private fun OverviewCard(state: DashboardUiState) {
                 color = MaterialTheme.colorScheme.primary
             )
             Text(
-                text = "Track today's home habits and compare them with a more sustainable target.",
+                text = "Track this day's home habits and compare them with a more sustainable target.",
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.SemiBold
             )
@@ -233,7 +265,7 @@ private fun OverviewCard(state: DashboardUiState) {
                 text = if (state.hasLogs) {
                     "${state.logCount} logged activities across ${state.trackedActivityCount} tracked categories."
                 } else {
-                    "No activities logged yet. Add your first habit to start today's summary."
+                    "No activities logged yet. Add your first habit to start this day's summary."
                 },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -478,8 +510,13 @@ private fun DashboardScreenPreview() {
                 date = LocalDate.of(2026, 5, 18),
                 logs = sampleLogsFor(LocalDate.of(2026, 5, 18))
             ),
+            selectedDate = LocalDate.of(2026, 5, 18),
+            anchorDate = LocalDate.of(2026, 5, 18),
+            allLogs = sampleLogsFor(LocalDate.of(2026, 5, 18)),
+            activityTypes = PredefinedActivities.all,
             snackbarHostState = SnackbarHostState(),
-            onLogActivityClick = {}
+            onLogActivityClick = {},
+            onSelectedDateChange = {}
         )
     }
 }
