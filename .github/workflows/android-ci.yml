@@ -1,4 +1,4 @@
-name: Android CI
+name: Android CI/CD
 
 on:
   push:
@@ -10,7 +10,7 @@ on:
 
 jobs:
   build:
-    name: Build and test Android project
+    name: Build, test, and package Android project
     runs-on: ubuntu-latest
 
     steps:
@@ -37,3 +37,13 @@ jobs:
       - name: Build project
         working-directory: app
         run: ./gradlew build
+
+      - name: Build debug APK
+        working-directory: app
+        run: ./gradlew assembleDebug
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: sustainscore-debug-apk
+          path: app/app/build/outputs/apk/debug/app-debug.apk
