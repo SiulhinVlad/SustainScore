@@ -32,20 +32,20 @@ flowchart TB
         AIService["AI Feedback Service"]
     end
 
-    User --> Dashboard
-    User --> LogScreen
-    Dashboard --> ScoreCalc
-    Dashboard --> Recommendation
-    Dashboard --> SummaryLogic
-    LogScreen --> Repository
-    SummaryScreen --> SummaryLogic
-    FeedbackScreen --> PromptBuilder
-    ScoreCalc --> Repository
-    Recommendation --> Repository
-    SummaryLogic --> Repository
-    Improvement --> SummaryLogic
-    Repository --> LocalStorage
-    PromptBuilder --> AIService
+    User <--> Dashboard
+    User <--> LogScreen
+    Dashboard <--> ScoreCalc
+    Dashboard <--> Recommendation
+    Dashboard <--> SummaryLogic
+    LogScreen <--> Repository
+    SummaryScreen <--> SummaryLogic
+    FeedbackScreen <--> PromptBuilder
+    ScoreCalc <--> Repository
+    Recommendation <--> Repository
+    SummaryLogic <--> Repository
+    Improvement <--> SummaryLogic
+    Repository <--> LocalStorage
+    PromptBuilder <--> AIService
 ```
 
 ## 2. Main Modules
