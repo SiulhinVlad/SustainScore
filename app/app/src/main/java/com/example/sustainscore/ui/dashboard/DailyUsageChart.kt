@@ -1,6 +1,8 @@
 package com.example.sustainscore.ui.dashboard
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -9,18 +11,24 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -29,8 +37,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.example.sustainscore.model.ActivityLog
 import com.example.sustainscore.model.ActivityType
@@ -38,6 +51,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.math.max
+import kotlin.math.roundToInt
 
 private const val MinutesPerDay = 24 * 60
 private const val TimelinePageCount = 731
@@ -54,8 +68,16 @@ internal data class UsageChartBlock(
     val impact: Double,
     val stackBase: Double
 ) {
+    val durationMinutes: Int = endMinute - startMinute
+    val segmentKey: UsageChartSegmentKey = UsageChartSegmentKey(id, startMinute, endMinute)
     val stackBottom: Double = stackBase + impact
 }
+
+internal data class UsageChartSegmentKey(
+    val logId: String,
+    val startMinute: Int,
+    val endMinute: Int
+)
 
 internal data class HourDepthPoint(
     val hour: Int,
@@ -90,6 +112,26 @@ private data class StackedUsageLayout(
     val maxDepth: Double
 )
 
+private data class ChartRenderSpec(
+    val leftPadding: Float,
+    val topPadding: Float,
+    val chartWidth: Float,
+    val depthToPixels: Float,
+    val pixelsPerMinute: Float
+)
+
+private data class RenderedUsageBlock(
+    val block: UsageChartBlock,
+    val left: Float,
+    val top: Float,
+    val width: Float,
+    val height: Float
+) {
+    fun contains(point: Offset): Boolean {
+        return point.x in left..(left + width) && point.y in top..(top + height)
+    }
+}
+
 @Composable
 internal fun DailyUsageChartCard(
     anchorDate: LocalDate,
@@ -97,6 +139,8 @@ internal fun DailyUsageChartCard(
     logs: List<ActivityLog>,
     activityTypes: List<ActivityType>,
     onSelectedDateChange: (LocalDate) -> Unit,
+    onDeleteSegment: (LocalDate, UsageChartSegmentKey) -> Unit,
+    onMoveSegment: (LocalDate, UsageChartSegmentKey, Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val initialPage = remember(anchorDate, selectedDate) {
@@ -162,6 +206,8 @@ internal fun DailyUsageChartCard(
                 DailyUsageChart(
                     pageDate = pageDate,
                     layout = layout,
+                    onDeleteSegment = onDeleteSegment,
+                    onMoveSegment = onMoveSegment,
                     chartTestTag = if (page == pagerState.currentPage) {
                         "daily_usage_chart_canvas_selected"
                     } else {
@@ -236,12 +282,54 @@ private fun LegendItem(
 private fun DailyUsageChart(
     pageDate: LocalDate,
     layout: DailyUsageChartLayout,
+    onDeleteSegment: (LocalDate, UsageChartSegmentKey) -> Unit,
+    onMoveSegment: (LocalDate, UsageChartSegmentKey, Int) -> Unit,
     chartTestTag: String?,
     modifier: Modifier = Modifier
 ) {
     val outlineColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.85f)
     val actualLineColor = MaterialTheme.colorScheme.onSurface
     val recommendedOverlayColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.95f)
+    val density = LocalDensity.current
+    var chartCanvasSize by remember(pageDate) { mutableStateOf(IntSize.Zero) }
+    var selectedSegmentKey by remember(pageDate) { mutableStateOf<UsageChartSegmentKey?>(null) }
+    var dragPreviewStartMinute by remember(pageDate) { mutableStateOf<Int?>(null) }
+
+    val renderSpec = remember(chartCanvasSize, layout.maxDepth) {
+        buildChartRenderSpec(chartCanvasSize, layout.maxDepth)
+    }
+    val renderedBlocks = remember(layout.blocks, renderSpec) {
+        renderSpec?.let { spec ->
+            layout.blocks.map { block -> renderUsageChartBlock(block, spec) }
+        } ?: emptyList()
+    }
+    val selectedBlock = remember(layout.blocks, selectedSegmentKey) {
+        layout.blocks.firstOrNull { block -> block.segmentKey == selectedSegmentKey }
+    }
+    val selectedDisplayBlock = remember(selectedBlock, dragPreviewStartMinute) {
+        selectedBlock?.let { block ->
+            val previewStart = dragPreviewStartMinute ?: block.startMinute
+            block.copy(
+                startMinute = previewStart,
+                endMinute = previewStart + block.durationMinutes
+            )
+        }
+    }
+    val selectedRenderedBlock = remember(selectedDisplayBlock, renderSpec) {
+        if (selectedDisplayBlock != null && renderSpec != null) {
+            renderUsageChartBlock(selectedDisplayBlock, renderSpec)
+        } else {
+            null
+        }
+    }
+
+    LaunchedEffect(layout.blocks, selectedSegmentKey) {
+        if (selectedSegmentKey != null && selectedBlock == null) {
+            selectedSegmentKey = null
+            dragPreviewStartMinute = null
+        }
+    }
+
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -268,64 +356,58 @@ private fun DailyUsageChart(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(210.dp)
+                    .onSizeChanged { chartCanvasSize = it }
                     .align(Alignment.TopCenter)
             ) {
-                val leftPadding = 12f
-                val rightPadding = 12f
-                val topPadding = 18f
-                val bottomPadding = 18f
-                val chartWidth = size.width - leftPadding - rightPadding
-                val chartHeight = size.height - topPadding - bottomPadding
-                val depthScaleBase = max(layout.maxDepth, 12.0)
-                val depthToPixels = if (depthScaleBase == 0.0) 0f else (chartHeight / depthScaleBase).toFloat()
-                val zeroY = topPadding
+                val spec = buildChartRenderSpec(
+                    canvasSize = IntSize(size.width.roundToInt(), size.height.roundToInt()),
+                    maxDepth = layout.maxDepth
+                ) ?: return@Canvas
+                val zeroY = spec.topPadding
+                val selectedPreview = selectedDisplayBlock?.let { block ->
+                    renderUsageChartBlock(block, spec)
+                }
 
                 drawLine(
                     color = outlineColor,
-                    start = Offset(leftPadding, zeroY),
-                    end = Offset(leftPadding + chartWidth, zeroY),
+                    start = Offset(spec.leftPadding, zeroY),
+                    end = Offset(spec.leftPadding + spec.chartWidth, zeroY),
                     strokeWidth = 3f
                 )
 
                 layout.blocks.forEach { block ->
-                    val x = leftPadding + chartWidth * (block.startMinute / MinutesPerDay.toFloat())
-                    val width = chartWidth * ((block.endMinute - block.startMinute) / MinutesPerDay.toFloat())
-                    val y = zeroY + (block.stackBase.toFloat() * depthToPixels)
-                    val height = (block.impact.toFloat() * depthToPixels).coerceAtLeast(10f)
+                    val renderedBlock = renderUsageChartBlock(block, spec)
 
                     drawRect(
                         color = block.color.copy(alpha = 0.78f),
-                        topLeft = Offset(x, y),
-                        size = Size(width.coerceAtLeast(6f), height)
+                        topLeft = Offset(renderedBlock.left, renderedBlock.top),
+                        size = Size(renderedBlock.width, renderedBlock.height)
                     )
                     drawRect(
                         color = block.color.copy(alpha = 0.98f),
-                        topLeft = Offset(x, y),
-                        size = Size(width.coerceAtLeast(6f), height),
+                        topLeft = Offset(renderedBlock.left, renderedBlock.top),
+                        size = Size(renderedBlock.width, renderedBlock.height),
                         style = Stroke(width = 2f)
                     )
                 }
 
                 layout.recommendedBlocks.forEach { block ->
-                    val x = leftPadding + chartWidth * (block.startMinute / MinutesPerDay.toFloat())
-                    val width = chartWidth * ((block.endMinute - block.startMinute) / MinutesPerDay.toFloat())
-                    val y = zeroY + (block.stackBase.toFloat() * depthToPixels)
-                    val height = (block.impact.toFloat() * depthToPixels).coerceAtLeast(10f)
+                    val renderedBlock = renderUsageChartBlock(block, spec)
                     val insetX = 2f
-                    val recommendedWidth = (width.coerceAtLeast(6f) - insetX * 2).coerceAtLeast(2f)
+                    val recommendedWidth = (renderedBlock.width - insetX * 2).coerceAtLeast(2f)
 
                     drawRect(
                         color = recommendedOverlayColor,
-                        topLeft = Offset(x + insetX, y),
-                        size = Size(recommendedWidth, height),
+                        topLeft = Offset(renderedBlock.left + insetX, renderedBlock.top),
+                        size = Size(recommendedWidth, renderedBlock.height),
                         style = Stroke(width = 2f)
                     )
                 }
 
                 val recommendedLinePath = Path()
                 layout.recommendedHourDepths.forEachIndexed { index, point ->
-                    val x = leftPadding + chartWidth * ((point.hour * 60f) / MinutesPerDay.toFloat())
-                    val y = zeroY + (point.depth.toFloat() * depthToPixels)
+                    val x = spec.leftPadding + spec.chartWidth * ((point.hour * 60f) / MinutesPerDay.toFloat())
+                    val y = zeroY + (point.depth.toFloat() * spec.depthToPixels)
                     if (index == 0) {
                         recommendedLinePath.moveTo(x, y)
                     } else {
@@ -340,8 +422,8 @@ private fun DailyUsageChart(
                 )
 
                 layout.recommendedHourDepths.forEach { point ->
-                    val x = leftPadding + chartWidth * ((point.hour * 60f) / MinutesPerDay.toFloat())
-                    val y = zeroY + (point.depth.toFloat() * depthToPixels)
+                    val x = spec.leftPadding + spec.chartWidth * ((point.hour * 60f) / MinutesPerDay.toFloat())
+                    val y = zeroY + (point.depth.toFloat() * spec.depthToPixels)
                     drawCircle(
                         color = recommendedOverlayColor,
                         radius = 4.5f,
@@ -351,8 +433,8 @@ private fun DailyUsageChart(
 
                 val linePath = Path()
                 layout.hourDepths.forEachIndexed { index, point ->
-                    val x = leftPadding + chartWidth * ((point.hour * 60f) / MinutesPerDay.toFloat())
-                    val y = zeroY + (point.depth.toFloat() * depthToPixels)
+                    val x = spec.leftPadding + spec.chartWidth * ((point.hour * 60f) / MinutesPerDay.toFloat())
+                    val y = zeroY + (point.depth.toFloat() * spec.depthToPixels)
                     if (index == 0) {
                         linePath.moveTo(x, y)
                     } else {
@@ -367,14 +449,102 @@ private fun DailyUsageChart(
                 )
 
                 layout.hourDepths.forEach { point ->
-                    val x = leftPadding + chartWidth * ((point.hour * 60f) / MinutesPerDay.toFloat())
-                    val y = zeroY + (point.depth.toFloat() * depthToPixels)
+                    val x = spec.leftPadding + spec.chartWidth * ((point.hour * 60f) / MinutesPerDay.toFloat())
+                    val y = zeroY + (point.depth.toFloat() * spec.depthToPixels)
                     drawCircle(
                         color = actualLineColor,
                         radius = 6f,
                         center = Offset(x, y)
                     )
                 }
+
+                if (selectedPreview != null && selectedBlock != null) {
+                    drawRect(
+                        color = selectedBlock.color.copy(alpha = 0.28f),
+                        topLeft = Offset(selectedPreview.left, selectedPreview.top),
+                        size = Size(selectedPreview.width, selectedPreview.height)
+                    )
+                    drawRect(
+                        color = actualLineColor,
+                        topLeft = Offset(selectedPreview.left, selectedPreview.top),
+                        size = Size(selectedPreview.width, selectedPreview.height),
+                        style = Stroke(width = 4f)
+                    )
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(210.dp)
+                    .align(Alignment.TopCenter)
+                    .pointerInput(renderedBlocks) {
+                        detectTapGestures { offset ->
+                            val tappedBlock = renderedBlocks.lastOrNull { renderedBlock ->
+                                renderedBlock.contains(offset)
+                            }
+                            selectedSegmentKey = tappedBlock?.block?.segmentKey
+                            dragPreviewStartMinute = null
+                        }
+                    }
+            )
+
+            if (selectedRenderedBlock != null && selectedBlock != null) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .offset {
+                            IntOffset(
+                                x = selectedRenderedBlock.left.roundToInt(),
+                                y = selectedRenderedBlock.top.roundToInt()
+                            )
+                        }
+                        .size(
+                            width = with(density) { selectedRenderedBlock.width.toDp() },
+                            height = with(density) { selectedRenderedBlock.height.toDp() }
+                        )
+                        .pointerInput(selectedBlock, renderSpec) {
+                            if (renderSpec == null) {
+                                return@pointerInput
+                            }
+                            detectDragGestures(
+                                onDragStart = {
+                                    dragPreviewStartMinute = selectedBlock.startMinute
+                                },
+                                onDragEnd = {
+                                    val previewStart = dragPreviewStartMinute
+                                    if (
+                                        previewStart != null &&
+                                        previewStart != selectedBlock.startMinute
+                                    ) {
+                                        onMoveSegment(
+                                            pageDate,
+                                            selectedBlock.segmentKey,
+                                            previewStart
+                                        )
+                                        selectedSegmentKey = null
+                                    }
+                                    dragPreviewStartMinute = null
+                                },
+                                onDragCancel = {
+                                    dragPreviewStartMinute = null
+                                }
+                            ) { change, dragAmount ->
+                                change.consume()
+                                val maxStartMinute = MinutesPerDay - selectedBlock.durationMinutes
+                                val deltaMinutes = (
+                                    dragAmount.x / renderSpec.pixelsPerMinute
+                                    ).roundToInt()
+                                if (deltaMinutes != 0) {
+                                    val currentStart =
+                                        dragPreviewStartMinute ?: selectedBlock.startMinute
+                                    dragPreviewStartMinute = (
+                                        currentStart + deltaMinutes
+                                        ).coerceIn(0, maxStartMinute)
+                                }
+                            }
+                        }
+                )
             }
 
             if (layout.blocks.isEmpty()) {
@@ -397,6 +567,69 @@ private fun DailyUsageChart(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+        }
+
+        if (layout.blocks.isNotEmpty()) {
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                shape = MaterialTheme.shapes.medium
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    if (selectedBlock == null) {
+                        Text(
+                            text = "Tap a colored block to select it. Then drag the selected block left or right to move it, or delete just that segment if it was logged by mistake.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        val displayStartMinute =
+                            dragPreviewStartMinute ?: selectedBlock.startMinute
+                        val displayEndMinute =
+                            displayStartMinute + selectedBlock.durationMinutes
+
+                        Text(
+                            text = "${selectedBlock.activityName}: ${
+                                formatMinuteRange(displayStartMinute, displayEndMinute)
+                            }",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Drag the selected block left or right to correct its time, or delete only this segment.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    selectedSegmentKey = null
+                                    dragPreviewStartMinute = null
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(text = "Clear")
+                            }
+                            Button(
+                                onClick = {
+                                    onDeleteSegment(pageDate, selectedBlock.segmentKey)
+                                    selectedSegmentKey = null
+                                    dragPreviewStartMinute = null
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(text = "Delete")
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -558,6 +791,245 @@ internal fun logsForDate(
             .atZone(zoneId)
             .toLocalDate() == date
     }
+}
+
+internal fun deleteChartSegment(
+    logs: List<ActivityLog>,
+    pageDate: LocalDate,
+    segment: UsageChartSegmentKey,
+    zoneId: ZoneId = ZoneId.systemDefault()
+): List<ActivityLog> {
+    val split = splitLogForChartSegment(
+        logs = logs,
+        pageDate = pageDate,
+        segment = segment,
+        zoneId = zoneId
+    ) ?: return logs
+
+    return replaceLogWithSegments(
+        logs = logs,
+        sourceLogId = split.source.id,
+        replacementLogs = listOfNotNull(split.before, split.after)
+    )
+}
+
+internal fun moveChartSegment(
+    logs: List<ActivityLog>,
+    pageDate: LocalDate,
+    segment: UsageChartSegmentKey,
+    newStartMinute: Int,
+    zoneId: ZoneId = ZoneId.systemDefault()
+): List<ActivityLog> {
+    val split = splitLogForChartSegment(
+        logs = logs,
+        pageDate = pageDate,
+        segment = segment,
+        zoneId = zoneId
+    ) ?: return logs
+
+    val maxStartMinute = MinutesPerDay - split.selected.durationMinutes
+    val clampedStartMinute = newStartMinute.coerceIn(0, maxStartMinute)
+    val movedStartTimestampMillis =
+        pageDate.atStartOfDay(zoneId).toInstant().toEpochMilli() +
+            clampedStartMinute * OneMinuteMillis
+    val movedSegment = split.selected.copy(
+        id = retainedOrDerivedSegmentId(
+            sourceLog = split.source,
+            label = "moved",
+            keepOriginalId = split.before == null && split.after == null,
+            startTimestampMillis = movedStartTimestampMillis,
+            durationMinutes = split.selected.durationMinutes
+        ),
+        startTimestampMillis = movedStartTimestampMillis
+    )
+
+    return replaceLogWithSegments(
+        logs = logs,
+        sourceLogId = split.source.id,
+        replacementLogs = listOfNotNull(split.before, split.after) + movedSegment
+    )
+}
+
+private data class SplitActivityLog(
+    val source: ActivityLog,
+    val before: ActivityLog?,
+    val selected: ActivityLog,
+    val after: ActivityLog?
+)
+
+private fun splitLogForChartSegment(
+    logs: List<ActivityLog>,
+    pageDate: LocalDate,
+    segment: UsageChartSegmentKey,
+    zoneId: ZoneId
+): SplitActivityLog? {
+    val sourceLog = logs.firstOrNull { log -> log.id == segment.logId } ?: return null
+    val sourceStartMillis = sourceLog.startTimestampMillis
+    val sourceEndMillis = sourceStartMillis + sourceLog.durationMinutes * OneMinuteMillis
+    val dayStartMillis = pageDate.atStartOfDay(zoneId).toInstant().toEpochMilli()
+    val segmentStartMillis = dayStartMillis + segment.startMinute * OneMinuteMillis
+    val segmentEndMillis = dayStartMillis + segment.endMinute * OneMinuteMillis
+    val actualSegmentStartMillis = max(sourceStartMillis, segmentStartMillis)
+    val actualSegmentEndMillis = minOf(sourceEndMillis, segmentEndMillis)
+
+    if (actualSegmentEndMillis <= actualSegmentStartMillis) {
+        return null
+    }
+
+    val selectedDurationMinutes =
+        ((actualSegmentEndMillis - actualSegmentStartMillis) / OneMinuteMillis).toInt()
+    val beforeDurationMinutes =
+        ((actualSegmentStartMillis - sourceStartMillis) / OneMinuteMillis).toInt()
+    val afterDurationMinutes =
+        ((sourceEndMillis - actualSegmentEndMillis) / OneMinuteMillis).toInt()
+
+    val beforeLog = if (beforeDurationMinutes > 0) {
+        sourceLog.copy(
+            id = derivedSegmentId(
+                sourceLog = sourceLog,
+                label = "before",
+                startTimestampMillis = sourceStartMillis,
+                durationMinutes = beforeDurationMinutes
+            ),
+            durationMinutes = beforeDurationMinutes
+        )
+    } else {
+        null
+    }
+
+    val selectedLog = sourceLog.copy(
+        id = retainedOrDerivedSegmentId(
+            sourceLog = sourceLog,
+            label = "selected",
+            keepOriginalId = beforeLog == null && afterDurationMinutes == 0,
+            startTimestampMillis = actualSegmentStartMillis,
+            durationMinutes = selectedDurationMinutes
+        ),
+        startTimestampMillis = actualSegmentStartMillis,
+        durationMinutes = selectedDurationMinutes
+    )
+
+    val afterLog = if (afterDurationMinutes > 0) {
+        sourceLog.copy(
+            id = derivedSegmentId(
+                sourceLog = sourceLog,
+                label = "after",
+                startTimestampMillis = actualSegmentEndMillis,
+                durationMinutes = afterDurationMinutes
+            ),
+            startTimestampMillis = actualSegmentEndMillis,
+            durationMinutes = afterDurationMinutes
+        )
+    } else {
+        null
+    }
+
+    return SplitActivityLog(
+        source = sourceLog,
+        before = beforeLog,
+        selected = selectedLog,
+        after = afterLog
+    )
+}
+
+private fun replaceLogWithSegments(
+    logs: List<ActivityLog>,
+    sourceLogId: String,
+    replacementLogs: List<ActivityLog>
+): List<ActivityLog> {
+    val replacedLogs = logs.filterNot { log -> log.id == sourceLogId } + replacementLogs
+    return replacedLogs.sortedWith(
+        compareBy<ActivityLog> { it.startTimestampMillis }
+            .thenBy { it.id }
+    )
+}
+
+private fun retainedOrDerivedSegmentId(
+    sourceLog: ActivityLog,
+    label: String,
+    keepOriginalId: Boolean,
+    startTimestampMillis: Long,
+    durationMinutes: Int
+): String {
+    return if (keepOriginalId) {
+        sourceLog.id
+    } else {
+        derivedSegmentId(
+            sourceLog = sourceLog,
+            label = label,
+            startTimestampMillis = startTimestampMillis,
+            durationMinutes = durationMinutes
+        )
+    }
+}
+
+private fun derivedSegmentId(
+    sourceLog: ActivityLog,
+    label: String,
+    startTimestampMillis: Long,
+    durationMinutes: Int
+): String {
+    return "${sourceLog.id}-$label-$startTimestampMillis-$durationMinutes"
+}
+
+private fun buildChartRenderSpec(
+    canvasSize: IntSize,
+    maxDepth: Double
+): ChartRenderSpec? {
+    if (canvasSize.width <= 0 || canvasSize.height <= 0) {
+        return null
+    }
+
+    val leftPadding = 12f
+    val rightPadding = 12f
+    val topPadding = 18f
+    val bottomPadding = 18f
+    val chartWidth = canvasSize.width - leftPadding - rightPadding
+    val chartHeight = canvasSize.height - topPadding - bottomPadding
+    val depthScaleBase = max(maxDepth, 12.0)
+    val depthToPixels = if (depthScaleBase == 0.0) 0f else (chartHeight / depthScaleBase).toFloat()
+
+    return ChartRenderSpec(
+        leftPadding = leftPadding,
+        topPadding = topPadding,
+        chartWidth = chartWidth,
+        depthToPixels = depthToPixels,
+        pixelsPerMinute = chartWidth / MinutesPerDay.toFloat()
+    )
+}
+
+private fun renderUsageChartBlock(
+    block: UsageChartBlock,
+    renderSpec: ChartRenderSpec
+): RenderedUsageBlock {
+    val left =
+        renderSpec.leftPadding + renderSpec.chartWidth * (block.startMinute / MinutesPerDay.toFloat())
+    val width =
+        (renderSpec.chartWidth * (block.durationMinutes / MinutesPerDay.toFloat())).coerceAtLeast(6f)
+    val top = renderSpec.topPadding + (block.stackBase.toFloat() * renderSpec.depthToPixels)
+    val height = (block.impact.toFloat() * renderSpec.depthToPixels).coerceAtLeast(10f)
+
+    return RenderedUsageBlock(
+        block = block,
+        left = left,
+        top = top,
+        width = width,
+        height = height
+    )
+}
+
+private fun formatMinuteRange(
+    startMinute: Int,
+    endMinute: Int
+): String {
+    return "${formatMinuteOfDay(startMinute)} - ${formatMinuteOfDay(endMinute)}"
+}
+
+private fun formatMinuteOfDay(minuteOfDay: Int): String {
+    val normalizedMinute = minuteOfDay.coerceIn(0, MinutesPerDay)
+    val hour = (normalizedMinute / 60) % 24
+    val minute = normalizedMinute % 60
+    return String.format("%02d:%02d", hour, minute)
 }
 
 private fun dateForPage(anchorDate: LocalDate, page: Int): LocalDate {

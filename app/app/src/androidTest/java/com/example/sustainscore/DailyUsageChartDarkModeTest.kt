@@ -60,7 +60,9 @@ class DailyUsageChartDarkModeTest {
                     selectedDate = date,
                     logs = logs,
                     activityTypes = PredefinedActivities.all,
-                    onSelectedDateChange = {}
+                    onSelectedDateChange = {},
+                    onDeleteSegment = { _, _ -> },
+                    onMoveSegment = { _, _, _ -> }
                 )
             }
         }
