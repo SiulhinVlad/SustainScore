@@ -64,7 +64,9 @@ internal data class HourDepthPoint(
 
 internal data class DailyUsageChartLayout(
     val blocks: List<UsageChartBlock>,
+    val recommendedBlocks: List<UsageChartBlock>,
     val hourDepths: List<HourDepthPoint>,
+    val recommendedHourDepths: List<HourDepthPoint>,
     val maxDepth: Double
 )
 
@@ -80,6 +82,12 @@ private data class RawUsageBlock(
     val startMinute: Int,
     val endMinute: Int,
     val impact: Double
+)
+
+private data class StackedUsageLayout(
+    val blocks: List<UsageChartBlock>,
+    val hourDepths: List<HourDepthPoint>,
+    val maxDepth: Double
 )
 
 @Composable
@@ -126,7 +134,7 @@ internal fun DailyUsageChartCard(
                 fontWeight = FontWeight.SemiBold
             )
             Text(
-                text = "Swipe horizontally to move from one day to the next. Each block shows a logged usage period as a negative impact.",
+                text = "Swipe horizontally to move from one day to the next. Colored blocks show logged usage, while the gray overlay shows the recommended version of the same usage.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -153,7 +161,12 @@ internal fun DailyUsageChartCard(
 
                 DailyUsageChart(
                     pageDate = pageDate,
-                    layout = layout
+                    layout = layout,
+                    chartTestTag = if (page == pagerState.currentPage) {
+                        "daily_usage_chart_canvas_selected"
+                    } else {
+                        null
+                    }
                 )
             }
         }
@@ -223,9 +236,12 @@ private fun LegendItem(
 private fun DailyUsageChart(
     pageDate: LocalDate,
     layout: DailyUsageChartLayout,
+    chartTestTag: String?,
     modifier: Modifier = Modifier
 ) {
     val outlineColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.85f)
+    val actualLineColor = MaterialTheme.colorScheme.onSurface
+    val recommendedOverlayColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.95f)
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -240,6 +256,13 @@ private fun DailyUsageChart(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(240.dp)
+                .let { baseModifier ->
+                    if (chartTestTag != null) {
+                        baseModifier.testTag(chartTestTag)
+                    } else {
+                        baseModifier
+                    }
+                }
         ) {
             Canvas(
                 modifier = Modifier
@@ -283,6 +306,49 @@ private fun DailyUsageChart(
                     )
                 }
 
+                layout.recommendedBlocks.forEach { block ->
+                    val x = leftPadding + chartWidth * (block.startMinute / MinutesPerDay.toFloat())
+                    val width = chartWidth * ((block.endMinute - block.startMinute) / MinutesPerDay.toFloat())
+                    val y = zeroY + (block.stackBase.toFloat() * depthToPixels)
+                    val height = (block.impact.toFloat() * depthToPixels).coerceAtLeast(10f)
+                    val insetX = 2f
+                    val recommendedWidth = (width.coerceAtLeast(6f) - insetX * 2).coerceAtLeast(2f)
+
+                    drawRect(
+                        color = recommendedOverlayColor,
+                        topLeft = Offset(x + insetX, y),
+                        size = Size(recommendedWidth, height),
+                        style = Stroke(width = 2f)
+                    )
+                }
+
+                val recommendedLinePath = Path()
+                layout.recommendedHourDepths.forEachIndexed { index, point ->
+                    val x = leftPadding + chartWidth * ((point.hour * 60f) / MinutesPerDay.toFloat())
+                    val y = zeroY + (point.depth.toFloat() * depthToPixels)
+                    if (index == 0) {
+                        recommendedLinePath.moveTo(x, y)
+                    } else {
+                        recommendedLinePath.lineTo(x, y)
+                    }
+                }
+
+                drawPath(
+                    path = recommendedLinePath,
+                    color = recommendedOverlayColor,
+                    style = Stroke(width = 4f, cap = StrokeCap.Round)
+                )
+
+                layout.recommendedHourDepths.forEach { point ->
+                    val x = leftPadding + chartWidth * ((point.hour * 60f) / MinutesPerDay.toFloat())
+                    val y = zeroY + (point.depth.toFloat() * depthToPixels)
+                    drawCircle(
+                        color = recommendedOverlayColor,
+                        radius = 4.5f,
+                        center = Offset(x, y)
+                    )
+                }
+
                 val linePath = Path()
                 layout.hourDepths.forEachIndexed { index, point ->
                     val x = leftPadding + chartWidth * ((point.hour * 60f) / MinutesPerDay.toFloat())
@@ -296,7 +362,7 @@ private fun DailyUsageChart(
 
                 drawPath(
                     path = linePath,
-                    color = Color.Black,
+                    color = actualLineColor,
                     style = Stroke(width = 5f, cap = StrokeCap.Round)
                 )
 
@@ -304,7 +370,7 @@ private fun DailyUsageChart(
                     val x = leftPadding + chartWidth * ((point.hour * 60f) / MinutesPerDay.toFloat())
                     val y = zeroY + (point.depth.toFloat() * depthToPixels)
                     drawCircle(
-                        color = Color.Black,
+                        color = actualLineColor,
                         radius = 6f,
                         center = Offset(x, y)
                     )
@@ -342,11 +408,48 @@ internal fun buildDailyUsageChartLayout(
     activityTypes: List<ActivityType>,
     zoneId: ZoneId = ZoneId.systemDefault()
 ): DailyUsageChartLayout {
+    val actualLayout = buildStackedUsageLayout(
+        rawBlocks = buildRawUsageBlocks(
+            date = date,
+            logs = logs,
+            activityTypes = activityTypes,
+            zoneId = zoneId
+        ) { activityType, log ->
+            activityType.weight * log.quantity
+        }
+    )
+    val recommendedLayout = buildStackedUsageLayout(
+        rawBlocks = buildRawUsageBlocks(
+            date = date,
+            logs = logs,
+            activityTypes = activityTypes,
+            zoneId = zoneId
+        ) { activityType, log ->
+            activityType.weight * minOf(log.quantity, activityType.recommendedLimit)
+        }
+    )
+
+    return DailyUsageChartLayout(
+        blocks = actualLayout.blocks,
+        recommendedBlocks = recommendedLayout.blocks,
+        hourDepths = actualLayout.hourDepths,
+        recommendedHourDepths = recommendedLayout.hourDepths,
+        maxDepth = max(actualLayout.maxDepth, recommendedLayout.maxDepth)
+    )
+}
+
+private fun buildRawUsageBlocks(
+    date: LocalDate,
+    logs: List<ActivityLog>,
+    activityTypes: List<ActivityType>,
+    zoneId: ZoneId,
+    impactForLog: (ActivityType, ActivityLog) -> Double
+): List<RawUsageBlock> {
     val activityTypesById = activityTypes.associateBy { it.id }
     val dayStartMillis = date.atStartOfDay(zoneId).toInstant().toEpochMilli()
     val dayEndMillis = dayStartMillis + OneDayMillis
 
-    val rawBlocks = logs.mapNotNull { log ->
+    return logs.mapNotNull { log ->
         val activityType = activityTypesById[log.activityTypeId] ?: return@mapNotNull null
         val logStartMillis = log.startTimestampMillis
         val logEndMillis = logStartMillis + log.durationMinutes * OneMinuteMillis
@@ -357,16 +460,23 @@ internal fun buildDailyUsageChartLayout(
             return@mapNotNull null
         }
 
+        val impact = impactForLog(activityType, log)
+        if (impact <= 0.0) {
+            return@mapNotNull null
+        }
+
         RawUsageBlock(
             id = log.id,
             activityName = activityType.name,
             color = colorForActivity(activityType.id),
             startMinute = ((clippedStartMillis - dayStartMillis) / OneMinuteMillis).toInt(),
             endMinute = ((clippedEndMillis - dayStartMillis) / OneMinuteMillis).toInt(),
-            impact = activityType.weight * log.quantity
+            impact = impact
         )
     }.sortedWith(compareBy<RawUsageBlock> { it.startMinute }.thenByDescending { it.impact }.thenBy { it.id })
+}
 
+private fun buildStackedUsageLayout(rawBlocks: List<RawUsageBlock>): StackedUsageLayout {
     val timelineBoundaries = rawBlocks
         .flatMap { block -> listOf(block.startMinute, block.endMinute) }
         .distinct()
@@ -431,7 +541,7 @@ internal fun buildDailyUsageChartLayout(
         )
     }
 
-    return DailyUsageChartLayout(
+    return StackedUsageLayout(
         blocks = stackedBlocks,
         hourDepths = hourDepths,
         maxDepth = stackedBlocks.maxOfOrNull { it.stackBottom } ?: 0.0

@@ -4,7 +4,9 @@ import androidx.compose.ui.graphics.Color
 
 val ForestGreen = Color(0xFF2F6F4F)
 val SageGreen = Color(0xFF567C5B)
+val RiverBlue = Color(0xFF2E6FB8)
 val SunlitClay = Color(0xFFB67A3C)
+val AlertRed = Color(0xFFC4493D)
 val MistBackground = Color(0xFFF3F6EF)
 val CardSurface = Color(0xFFFFFFFF)
 val SoftOutline = Color(0xFFD3DBCE)
