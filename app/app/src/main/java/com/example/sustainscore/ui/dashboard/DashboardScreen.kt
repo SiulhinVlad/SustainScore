@@ -125,6 +125,33 @@ fun DashboardRoute(modifier: Modifier = Modifier) {
             onSelectedDateChange = { date ->
                 selectedDateEpochDay = date.toEpochDay()
             },
+            onDeleteChartSegment = { date, segment ->
+                val updatedLogs = deleteChartSegment(
+                    logs = allLogs,
+                    pageDate = date,
+                    segment = segment
+                )
+                if (updatedLogs != allLogs) {
+                    allLogs = updatedLogs
+                    coroutineScope.launch {
+                        snackbarHostState.showSnackbar("Activity segment deleted")
+                    }
+                }
+            },
+            onMoveChartSegment = { date, segment, newStartMinute ->
+                val updatedLogs = moveChartSegment(
+                    logs = allLogs,
+                    pageDate = date,
+                    segment = segment,
+                    newStartMinute = newStartMinute
+                )
+                if (updatedLogs != allLogs) {
+                    allLogs = updatedLogs
+                    coroutineScope.launch {
+                        snackbarHostState.showSnackbar("Activity segment moved")
+                    }
+                }
+            },
             modifier = modifier
         )
 
@@ -178,7 +205,7 @@ internal fun buildDashboardUiState(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DashboardScreen(
+internal fun DashboardScreen(
     state: DashboardUiState,
     selectedDate: LocalDate,
     anchorDate: LocalDate,
@@ -187,6 +214,8 @@ fun DashboardScreen(
     snackbarHostState: SnackbarHostState,
     onLogActivityClick: () -> Unit,
     onSelectedDateChange: (LocalDate) -> Unit,
+    onDeleteChartSegment: (LocalDate, UsageChartSegmentKey) -> Unit,
+    onMoveChartSegment: (LocalDate, UsageChartSegmentKey, Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Scaffold(
@@ -233,7 +262,9 @@ fun DashboardScreen(
                     selectedDate = selectedDate,
                     logs = allLogs,
                     activityTypes = activityTypes,
-                    onSelectedDateChange = onSelectedDateChange
+                    onSelectedDateChange = onSelectedDateChange,
+                    onDeleteSegment = onDeleteChartSegment,
+                    onMoveSegment = onMoveChartSegment
                 )
             }
             item {
@@ -538,7 +569,9 @@ private fun DashboardScreenPreview() {
             activityTypes = PredefinedActivities.all,
             snackbarHostState = SnackbarHostState(),
             onLogActivityClick = {},
-            onSelectedDateChange = {}
+            onSelectedDateChange = {},
+            onDeleteChartSegment = { _, _ -> },
+            onMoveChartSegment = { _, _, _ -> }
         )
     }
 }
