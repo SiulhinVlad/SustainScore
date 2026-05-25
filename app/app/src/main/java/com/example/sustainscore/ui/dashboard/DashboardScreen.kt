@@ -30,6 +30,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -43,6 +44,10 @@ import com.example.sustainscore.model.DailySummary
 import com.example.sustainscore.model.PredefinedActivities
 import com.example.sustainscore.ui.logactivity.LogActivityScreen
 import com.example.sustainscore.ui.logactivity.parseTimeOfDay
+import com.example.sustainscore.ui.theme.AlertRed
+import com.example.sustainscore.ui.theme.ForestGreen
+import com.example.sustainscore.ui.theme.RiverBlue
+import com.example.sustainscore.ui.theme.SunlitClay
 import com.example.sustainscore.ui.theme.SustainScoreTheme
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -61,6 +66,16 @@ data class DashboardUiState(
     val trackedActivityCount: Int
 ) {
     val hasLogs: Boolean = logCount > 0
+}
+
+internal enum class CurrentScoreRange(
+    val minimumScore: Double,
+    val displayColor: Color
+) {
+    Good(minimumScore = 80.0, displayColor = ForestGreen),
+    Ok(minimumScore = 60.0, displayColor = RiverBlue),
+    Bad(minimumScore = 40.0, displayColor = SunlitClay),
+    Danger(minimumScore = 0.0, displayColor = AlertRed)
 }
 
 private enum class DashboardDestination {
@@ -284,6 +299,7 @@ private fun ScoreSection(state: DashboardUiState) {
                 ScoreCard(
                     title = "Current score",
                     score = state.currentScore,
+                    scoreColor = currentScoreRange(state.currentScore).displayColor,
                     supportingText = if (state.hasLogs) {
                         "Live score based on today's logged activities."
                     } else {
@@ -308,6 +324,7 @@ private fun ScoreSection(state: DashboardUiState) {
                 ScoreCard(
                     title = "Current score",
                     score = state.currentScore,
+                    scoreColor = currentScoreRange(state.currentScore).displayColor,
                     supportingText = if (state.hasLogs) {
                         "Live score based on today's logged activities."
                     } else {
@@ -335,6 +352,7 @@ private fun ScoreCard(
     title: String,
     score: Double,
     supportingText: String,
+    scoreColor: Color = MaterialTheme.colorScheme.primary,
     modifier: Modifier = Modifier
 ) {
     ElevatedCard(
@@ -356,7 +374,7 @@ private fun ScoreCard(
                 text = "${score.roundToInt()} / 100",
                 style = MaterialTheme.typography.displaySmall,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
+                color = scoreColor
             )
             Text(
                 text = supportingText,
@@ -487,6 +505,10 @@ private fun timestampForTime(date: LocalDate, timeText: String): Long {
         .atZone(ZoneId.systemDefault())
         .toInstant()
         .toEpochMilli()
+}
+
+internal fun currentScoreRange(score: Double): CurrentScoreRange {
+    return CurrentScoreRange.entries.first { score >= it.minimumScore }
 }
 
 private fun Int.toHourLabel(): String {

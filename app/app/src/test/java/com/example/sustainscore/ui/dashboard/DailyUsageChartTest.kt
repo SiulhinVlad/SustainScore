@@ -122,6 +122,47 @@ class DailyUsageChartTest {
         assertTrue(layout.hourDepths.any { it.hour == 24 && it.depth == 0.0 })
     }
 
+    @Test
+    fun buildDailyUsageChartLayoutBuildsRecommendedOverlayFromSustainableLimits() {
+        val date = LocalDate.of(2026, 5, 18)
+        val layout = buildDailyUsageChartLayout(
+            date = date,
+            logs = listOf(
+                ActivityLog(
+                    id = "lights",
+                    activityTypeId = "lighting",
+                    startTimestampMillis = timestampFor(date, 7, 0),
+                    quantity = 3.0,
+                    durationMinutes = 120
+                ),
+                ActivityLog(
+                    id = "computer",
+                    activityTypeId = "computer_tv",
+                    startTimestampMillis = timestampFor(date, 8, 0),
+                    quantity = 3.0,
+                    durationMinutes = 120
+                )
+            ),
+            activityTypes = PredefinedActivities.all
+        )
+
+        val actualLights = layout.blocks.first { it.id == "lights" }
+        val recommendedLights = layout.recommendedBlocks.first { it.id == "lights" }
+        val actualComputer = layout.blocks.first { it.id == "computer" }
+        val recommendedComputer = layout.recommendedBlocks.first { it.id == "computer" }
+        val actualDepthByHour = layout.hourDepths.associate { it.hour to it.depth }
+        val recommendedDepthByHour = layout.recommendedHourDepths.associate { it.hour to it.depth }
+
+        assertEquals(6.0, actualLights.impact, 0.001)
+        assertEquals(4.0, recommendedLights.impact, 0.001)
+        assertEquals(12.0, actualComputer.impact, 0.001)
+        assertEquals(8.0, recommendedComputer.impact, 0.001)
+
+        assertEquals(18.0, actualDepthByHour[8] ?: -1.0, 0.001)
+        assertEquals(12.0, recommendedDepthByHour[8] ?: -1.0, 0.001)
+        assertTrue(layout.maxDepth >= (actualDepthByHour[8] ?: 0.0))
+    }
+
     private fun timestampFor(date: LocalDate, hour: Int, minute: Int): Long {
         return LocalDateTime.of(date.year, date.monthValue, date.dayOfMonth, hour, minute)
             .atZone(ZoneId.systemDefault())
