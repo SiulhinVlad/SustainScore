@@ -21,9 +21,6 @@ class DashboardNavigationTest {
 
     @Test
     fun logActivityButtonNavigatesToLogActivityScreenAndBackReturnsToDashboard() {
-        composeRule.onNodeWithTag("dashboard_list")
-            .performScrollToNode(hasText("Log Activity"))
-
         composeRule.onNodeWithTag("dashboard_log_activity_button")
             .assertIsDisplayed()
             .performClick()
@@ -47,10 +44,8 @@ class DashboardNavigationTest {
 
     @Test
     fun savingActivityReturnsToDashboardAndUpdatesCurrentScore() {
-        composeRule.onNodeWithTag("dashboard_list")
-            .performScrollToNode(hasText("Log Activity"))
-
         composeRule.onNodeWithTag("dashboard_log_activity_button")
+            .assertIsDisplayed()
             .performClick()
 
         composeRule.onNodeWithTag("log_activity_quantity_field")
@@ -71,7 +66,29 @@ class DashboardNavigationTest {
         composeRule.onNodeWithText("Dashboard")
             .assertIsDisplayed()
 
+        composeRule.onNodeWithTag("dashboard_list")
+            .performScrollToNode(hasText("76 / 100"))
+
         composeRule.onNodeWithText("76 / 100")
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun guideButtonOpensAndClosesChartPopup() {
+        composeRule.onNodeWithTag("daily_usage_chart_guide_button")
+            .assertIsDisplayed()
+            .performClick()
+
+        composeRule.onNodeWithTag("daily_usage_chart_guide_dialog")
+            .assertIsDisplayed()
+
+        composeRule.onNodeWithText("Chart guide")
+            .assertIsDisplayed()
+
+        composeRule.onNodeWithText("Close")
+            .performClick()
+
+        composeRule.onNodeWithTag("daily_usage_chart_guide_button")
             .assertIsDisplayed()
     }
 }
