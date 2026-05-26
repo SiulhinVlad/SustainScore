@@ -5,7 +5,6 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -16,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
@@ -92,11 +92,6 @@ internal data class DailyUsageChartLayout(
     val maxDepth: Double
 )
 
-internal data class ActivityLegend(
-    val label: String,
-    val color: Color
-)
-
 private data class RawUsageBlock(
     val id: String,
     val activityName: String,
@@ -149,14 +144,7 @@ internal fun DailyUsageChartCard(
     val pagerState = rememberPagerState(initialPage = initialPage) {
         TimelinePageCount
     }
-    val legendItems = remember(activityTypes) {
-        activityTypes.map { activityType ->
-            ActivityLegend(
-                label = activityType.name,
-                color = colorForActivity(activityType.id)
-            )
-        }
-    }
+    var showGuideDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(pagerState.currentPage, anchorDate) {
         onSelectedDateChange(dateForPage(anchorDate, pagerState.currentPage))
@@ -172,18 +160,43 @@ internal fun DailyUsageChartCard(
             modifier = Modifier.padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text(
-                text = "Daily usage chart",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold
-            )
-            Text(
-                text = "Swipe horizontally to move from one day to the next. Colored blocks show logged usage, while the gray overlay shows the recommended version of the same usage.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Daily usage chart",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold
+                )
+                OutlinedButton(
+                    onClick = { showGuideDialog = true },
+                    modifier = Modifier.testTag("daily_usage_chart_guide_button")
+                ) {
+                    Text(text = "Guid")
+                }
+            }
 
-            ActivityLegendSection(items = legendItems)
+            if (showGuideDialog) {
+                AlertDialog(
+                    onDismissRequest = { showGuideDialog = false },
+                    modifier = Modifier.testTag("daily_usage_chart_guide_dialog"),
+                    confirmButton = {
+                        Button(onClick = { showGuideDialog = false }) {
+                            Text(text = "Close")
+                        }
+                    },
+                    title = {
+                        Text(text = "Chart guide")
+                    },
+                    text = {
+                        Text(
+                            text = "This chart covers one full day from 00:00 to 00:00. Swipe left or right to move between days. Colored blocks show actual logged usage, and the gray overlay shows the recommended version of that same usage. Tap a colored block to select it, drag it left or right to fix its time, or delete only that segment if it was logged by mistake."
+                        )
+                    }
+                )
+            }
 
             HorizontalPager(
                 state = pagerState,
@@ -215,65 +228,6 @@ internal fun DailyUsageChartCard(
                     }
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun ActivityLegendSection(items: List<ActivityLegend>) {
-    BoxWithConstraints {
-        val compactLayout = maxWidth < 420.dp
-        if (compactLayout) {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                LegendRow(items = items.take(2))
-                LegendRow(items = items.drop(2))
-            }
-        } else {
-            LegendRow(items = items)
-        }
-    }
-}
-
-@Composable
-private fun LegendRow(items: List<ActivityLegend>) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        items.forEach { item ->
-            LegendItem(
-                item = item,
-                modifier = Modifier.weight(1f)
-            )
-        }
-    }
-}
-
-@Composable
-private fun LegendItem(
-    item: ActivityLegend,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        modifier = modifier,
-        color = item.color.copy(alpha = 0.14f),
-        shape = MaterialTheme.shapes.medium
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Canvas(modifier = Modifier.size(12.dp)) {
-                drawCircle(color = item.color)
-            }
-            Text(
-                text = item.label,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface
-            )
         }
     }
 }
@@ -570,7 +524,7 @@ private fun DailyUsageChart(
             }
         }
 
-        if (layout.blocks.isNotEmpty()) {
+        if (layout.blocks.isNotEmpty() && selectedBlock != null) {
             Surface(
                 color = MaterialTheme.colorScheme.surfaceVariant,
                 shape = MaterialTheme.shapes.medium
@@ -579,54 +533,54 @@ private fun DailyUsageChart(
                     modifier = Modifier.padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    if (selectedBlock == null) {
-                        Text(
-                            text = "Tap a colored block to select it. Then drag the selected block left or right to move it, or delete just that segment if it was logged by mistake.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    } else {
-                        val displayStartMinute =
-                            dragPreviewStartMinute ?: selectedBlock.startMinute
-                        val displayEndMinute =
-                            displayStartMinute + selectedBlock.durationMinutes
+                    val displayStartMinute =
+                        dragPreviewStartMinute ?: selectedBlock.startMinute
+                    val displayEndMinute =
+                        displayStartMinute + selectedBlock.durationMinutes
 
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Canvas(modifier = Modifier.size(12.dp)) {
+                            drawCircle(color = selectedBlock.color)
+                        }
                         Text(
-                            text = "${selectedBlock.activityName}: ${
+                            text = "${selectedBlock.activityName}, ${
                                 formatMinuteRange(displayStartMinute, displayEndMinute)
                             }",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        Text(
-                            text = "Drag the selected block left or right to correct its time, or delete only this segment.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    }
+                    Text(
+                        text = "Drag the selected block left or right to correct its time, or delete only this segment.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                selectedSegmentKey = null
+                                dragPreviewStartMinute = null
+                            },
+                            modifier = Modifier.weight(1f)
                         ) {
-                            OutlinedButton(
-                                onClick = {
-                                    selectedSegmentKey = null
-                                    dragPreviewStartMinute = null
-                                },
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text(text = "Clear")
-                            }
-                            Button(
-                                onClick = {
-                                    onDeleteSegment(pageDate, selectedBlock.segmentKey)
-                                    selectedSegmentKey = null
-                                    dragPreviewStartMinute = null
-                                },
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text(text = "Delete")
-                            }
+                            Text(text = "Clear")
+                        }
+                        Button(
+                            onClick = {
+                                onDeleteSegment(pageDate, selectedBlock.segmentKey)
+                                selectedSegmentKey = null
+                                dragPreviewStartMinute = null
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(text = "Delete")
                         }
                     }
                 }
@@ -1022,7 +976,7 @@ private fun formatMinuteRange(
     startMinute: Int,
     endMinute: Int
 ): String {
-    return "${formatMinuteOfDay(startMinute)} - ${formatMinuteOfDay(endMinute)}"
+    return "${formatMinuteOfDay(startMinute)} to ${formatMinuteOfDay(endMinute)}"
 }
 
 private fun formatMinuteOfDay(minuteOfDay: Int): String {

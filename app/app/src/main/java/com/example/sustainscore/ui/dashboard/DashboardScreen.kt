@@ -14,6 +14,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -32,16 +33,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.example.sustainscore.domain.DailyAiReportGenerator
 import com.example.sustainscore.domain.DailySummaryGenerator
 import com.example.sustainscore.domain.HourlyScoreCalculator
 import com.example.sustainscore.domain.ScoreCalculator
+import com.example.sustainscore.domain.WeeklySummaryGenerator
 import com.example.sustainscore.model.ActivityLog
 import com.example.sustainscore.model.ActivityType
 import com.example.sustainscore.model.DailySummary
 import com.example.sustainscore.model.PredefinedActivities
+import com.example.sustainscore.model.WeeklySummary
 import com.example.sustainscore.ui.logactivity.LogActivityScreen
 import com.example.sustainscore.ui.logactivity.parseTimeOfDay
 import com.example.sustainscore.ui.theme.AlertRed
@@ -62,6 +68,8 @@ data class DashboardUiState(
     val currentScore: Double,
     val recommendedScore: Double,
     val dailySummary: DailySummary,
+    val dailyReport: String,
+    val weeklySummary: WeeklySummary,
     val logCount: Int,
     val trackedActivityCount: Int
 ) {
@@ -105,10 +113,11 @@ fun DashboardRoute(modifier: Modifier = Modifier) {
     val selectedDateLogs = remember(selectedDate, allLogs) {
         logsForDate(allLogs, selectedDate)
     }
-    val uiState = remember(selectedDate, selectedDateLogs, activityTypes) {
+    val uiState = remember(selectedDate, selectedDateLogs, allLogs, activityTypes) {
         buildDashboardUiState(
             date = selectedDate,
             logs = selectedDateLogs,
+            allLogs = allLogs,
             activityTypes = activityTypes
         )
     }
@@ -168,7 +177,9 @@ fun DashboardRoute(modifier: Modifier = Modifier) {
                 )
                 currentDestination = DashboardDestination.Dashboard
                 coroutineScope.launch {
-                    snackbarHostState.showSnackbar("${activityType.name} added to today")
+                    snackbarHostState.showSnackbar(
+                        "${activityType.name} added to ${selectedDate.toShortDateLabel()}"
+                    )
                 }
             },
             modifier = modifier
@@ -179,6 +190,7 @@ fun DashboardRoute(modifier: Modifier = Modifier) {
 internal fun buildDashboardUiState(
     date: LocalDate,
     logs: List<ActivityLog>,
+    allLogs: List<ActivityLog> = logs,
     activityTypes: List<ActivityType> = PredefinedActivities.all
 ): DashboardUiState {
     val scoreCalculator = ScoreCalculator(activityTypes)
@@ -186,17 +198,34 @@ internal fun buildDashboardUiState(
         activityTypes = activityTypes,
         hourlyScoreCalculator = HourlyScoreCalculator(scoreCalculator)
     )
+    val dailyAiReportGenerator = DailyAiReportGenerator(activityTypes)
+    val weeklySummaryGenerator = WeeklySummaryGenerator(
+        activityTypes = activityTypes,
+        scoreCalculator = scoreCalculator
+    )
     val currentScore = scoreCalculator.calculateActualScore(logs)
     val rawRecommendedScore = scoreCalculator.calculateRecommendedScore(logs)
     val recommendedScore = maxOf(rawRecommendedScore, currentScore)
+    val dailySummary = dailySummaryGenerator.generate(
+        date = date.format(DateTimeFormatter.ISO_DATE),
+        logs = logs
+    )
+    val logsForWeeklySummary = if (allLogs.isEmpty()) logs else allLogs
 
     return DashboardUiState(
         displayDate = date.format(DashboardDateFormatter),
         currentScore = currentScore,
         recommendedScore = recommendedScore,
-        dailySummary = dailySummaryGenerator.generate(
-            date = date.format(DateTimeFormatter.ISO_DATE),
-            logs = logs
+        dailySummary = dailySummary,
+        dailyReport = dailyAiReportGenerator.generate(
+            logs = logs,
+            currentScore = currentScore,
+            recommendedScore = recommendedScore,
+            dailySummary = dailySummary
+        ),
+        weeklySummary = weeklySummaryGenerator.generate(
+            endDate = date,
+            logs = logsForWeeklySummary
         ),
         logCount = logs.size,
         trackedActivityCount = logs.map { it.activityTypeId }.distinct().size
@@ -222,6 +251,23 @@ internal fun DashboardScreen(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+        bottomBar = {
+            Surface(
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 4.dp
+            ) {
+                Button(
+                    onClick = onLogActivityClick,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 12.dp)
+                        .testTag("dashboard_log_activity_button"),
+                    contentPadding = PaddingValues(vertical = 14.dp)
+                ) {
+                    Text(text = "Log Activity")
+                }
+            }
+        },
         topBar = {
             TopAppBar(
                 title = {
@@ -254,9 +300,6 @@ internal fun DashboardScreen(
                 OverviewCard(state = state)
             }
             item {
-                ScoreSection(state = state)
-            }
-            item {
                 DailyUsageChartCard(
                     anchorDate = anchorDate,
                     selectedDate = selectedDate,
@@ -269,17 +312,6 @@ internal fun DashboardScreen(
             }
             item {
                 DailySummaryCard(state = state)
-            }
-            item {
-                Button(
-                    onClick = onLogActivityClick,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("dashboard_log_activity_button"),
-                    contentPadding = PaddingValues(vertical = 14.dp)
-                ) {
-                    Text(text = "Log Activity")
-                }
             }
         }
     }
@@ -303,7 +335,7 @@ private fun OverviewCard(state: DashboardUiState) {
                 color = MaterialTheme.colorScheme.primary
             )
             Text(
-                text = "Track this day's home habits and compare them with a more sustainable target.",
+                text = "Track this day's home habits.",
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.SemiBold
             )
@@ -313,102 +345,6 @@ private fun OverviewCard(state: DashboardUiState) {
                 } else {
                     "No activities logged yet. Add your first habit to start this day's summary."
                 },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
-@Composable
-private fun ScoreSection(state: DashboardUiState) {
-    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-        val compactLayout = maxWidth < 420.dp
-
-        if (compactLayout) {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                ScoreCard(
-                    title = "Current score",
-                    score = state.currentScore,
-                    scoreColor = currentScoreRange(state.currentScore).displayColor,
-                    supportingText = if (state.hasLogs) {
-                        "Live score based on today's logged activities."
-                    } else {
-                        "Start logging to calculate your daily score."
-                    }
-                )
-                ScoreCard(
-                    title = "Recommended score",
-                    score = state.recommendedScore,
-                    supportingText = if (state.hasLogs) {
-                        "Target score for the same activity types."
-                    } else {
-                        "Your sustainable target will appear here."
-                    }
-                )
-            }
-        } else {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                ScoreCard(
-                    title = "Current score",
-                    score = state.currentScore,
-                    scoreColor = currentScoreRange(state.currentScore).displayColor,
-                    supportingText = if (state.hasLogs) {
-                        "Live score based on today's logged activities."
-                    } else {
-                        "Start logging to calculate your daily score."
-                    },
-                    modifier = Modifier.weight(1f)
-                )
-                ScoreCard(
-                    title = "Recommended score",
-                    score = state.recommendedScore,
-                    supportingText = if (state.hasLogs) {
-                        "Target score for the same activity types."
-                    } else {
-                        "Your sustainable target will appear here."
-                    },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ScoreCard(
-    title: String,
-    score: Double,
-    supportingText: String,
-    scoreColor: Color = MaterialTheme.colorScheme.primary,
-    modifier: Modifier = Modifier
-) {
-    ElevatedCard(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
-    ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                text = "${score.roundToInt()} / 100",
-                style = MaterialTheme.typography.displaySmall,
-                fontWeight = FontWeight.Bold,
-                color = scoreColor
-            )
-            Text(
-                text = supportingText,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -434,34 +370,123 @@ private fun DailySummaryCard(state: DashboardUiState) {
                 fontWeight = FontWeight.SemiBold
             )
 
-            if (!state.hasLogs) {
-                Text(
-                    text = "Once you log activities, this space will show your best hour and biggest sustainability impact.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            } else {
-                SummaryMetric(
-                    label = "Best hour",
-                    value = state.dailySummary.bestHour?.toHourLabel() ?: "Not available yet"
-                )
-                SummaryMetric(
-                    label = "Highest impact activity",
-                    value = state.dailySummary.highestImpactActivityName ?: "No dominant activity yet"
-                )
+            SummaryScoreSection(state = state)
 
-                Surface(
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                    shape = MaterialTheme.shapes.medium
+            SummaryMetric(
+                label = "Best hour",
+                value = state.dailySummary.bestHour?.toHourLabel() ?: "Not available yet"
+            )
+            SummaryMetric(
+                label = "Highest impact activity",
+                value = state.dailySummary.highestImpactActivityName ?: "No dominant activity yet"
+            )
+
+            Surface(
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                shape = MaterialTheme.shapes.medium
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
-                        text = buildRecommendationText(state),
-                        modifier = Modifier.padding(14.dp),
+                        text = "Daily report",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                    Text(
+                        text = state.dailyReport,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSecondaryContainer
                     )
                 }
             }
+
+            HorizontalDivider()
+
+            Text(
+                text = "Weekly summary",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold
+            )
+            SummaryMetric(
+                label = "From",
+                value = "${state.weeklySummary.startDate.toShortDateLabel()} to ${state.weeklySummary.endDate.toShortDateLabel()}"
+            )
+            SummaryMetric(
+                label = "Highest impact activity of week",
+                value = state.weeklySummary.highestImpactActivityName ?: "No dominant activity yet"
+            )
+            SummaryMetric(
+                label = "Average weekly score",
+                value = "${state.weeklySummary.averageScore.roundToInt()} / 100"
+            )
+        }
+    }
+}
+
+@Composable
+private fun SummaryScoreSection(state: DashboardUiState) {
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val compactLayout = maxWidth < 420.dp
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            SummaryScoreTile(
+                title = "Current score",
+                score = state.currentScore,
+                scoreColor = currentScoreRange(state.currentScore).displayColor,
+                compact = compactLayout,
+                modifier = Modifier.weight(1f)
+            )
+            SummaryScoreTile(
+                title = "Recommended score",
+                score = state.recommendedScore,
+                titleStyle = MaterialTheme.typography.labelMedium,
+                compact = compactLayout,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun SummaryScoreTile(
+    title: String,
+    score: Double,
+    scoreColor: Color = MaterialTheme.colorScheme.primary,
+    titleStyle: TextStyle = MaterialTheme.typography.labelLarge,
+    compact: Boolean = false,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = MaterialTheme.shapes.medium
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = title,
+                style = titleStyle,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Clip
+            )
+            Text(
+                text = "${score.roundToInt()} / 100",
+                style = if (compact) {
+                    MaterialTheme.typography.headlineSmall
+                } else {
+                    MaterialTheme.typography.headlineMedium
+                },
+                fontWeight = FontWeight.Bold,
+                color = scoreColor
+            )
         }
     }
 }
@@ -479,19 +504,6 @@ private fun SummaryMetric(label: String, value: String) {
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Medium
         )
-    }
-}
-
-internal fun buildRecommendationText(state: DashboardUiState): String {
-    val improvementActivity = state.dailySummary.highestImpactActivityName
-    return when {
-        !state.hasLogs -> "Add your first activity to receive a sustainability suggestion."
-        state.currentScore >= state.recommendedScore ->
-            "You are already meeting or beating the recommended score for today's activity mix. Keep the same pattern going."
-        improvementActivity != null ->
-            "Focusing on $improvementActivity is the clearest way to move closer to today's recommended score."
-        else ->
-            "Reducing your highest-use activity today would move you closer to the recommended score."
     }
 }
 
@@ -546,12 +558,8 @@ private fun Int.toHourLabel(): String {
     return String.format(Locale.getDefault(), "%02d:00", this)
 }
 
-private fun formatDecimal(value: Double): String {
-    return if (value % 1.0 == 0.0) {
-        value.roundToInt().toString()
-    } else {
-        String.format(Locale.getDefault(), "%.1f", value)
-    }
+private fun LocalDate.toShortDateLabel(): String {
+    return format(DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()))
 }
 
 @Preview(showBackground = true, widthDp = 412, heightDp = 915)
