@@ -325,3 +325,29 @@ classDiagram
     SustainabilityScore --> SummaryReport
     SummaryReport --> FeedbackRequest
 ```
+
+## 6. Implementation Deviations
+
+The design above records the planned architecture before implementation. During development, the architecture was refined based on the available time and the behavior of the working prototype.
+
+| Planned Element | Final Implementation | Reason for Change |
+|---|---|---|
+| Separate `SummaryScreen` and `FeedbackScreen` | Daily and weekly summaries and feedback are displayed directly on `DashboardScreen` | Keeps the main user flow simpler and reduces unnecessary navigation. |
+| `RecommendedProfileGenerator` | Recommended scores are calculated by `ScoreCalculator` and `HourlyScoreCalculator` | The recommended profile uses the same activity logs with sustainable quantity limits, so a separate class was not necessary. |
+| `SummaryGenerator` | Separate `DailySummaryGenerator` and `WeeklySummaryGenerator` | Makes daily and weekly responsibilities clearer. |
+| External `AIFeedbackService` | Local `DailyAiReportGenerator` | Avoids sending data to an external service and keeps the prototype achievable within the project timeline. |
+| Persistent `ActivityRepository` and local storage | Activity logs are kept in Compose state during the app session | Persistent storage remains future work. |
+| Basic chart visualization | Interactive `DailyUsageChart` | The final chart supports day navigation, recommended overlays, selecting blocks, moving blocks, and deleting segments. |
+
+The main implemented classes are:
+
+- `MainActivity`
+- `DashboardRoute`
+- `DashboardScreen`
+- `DailyUsageChart`
+- `LogActivityScreen`
+- `ScoreCalculator`
+- `HourlyScoreCalculator`
+- `DailySummaryGenerator`
+- `WeeklySummaryGenerator`
+- `DailyAiReportGenerator`
