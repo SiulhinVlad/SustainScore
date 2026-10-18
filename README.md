@@ -6,7 +6,7 @@ The goal of the project is to design, build, test, and evaluate a small but comp
 
 ## Project Overview
 
-SustainScore is a mobile application that helps users become more aware of their daily resource consumption habits. Users will be able to log predefined activities, view a sustainability score, compare their behavior with a recommended profile, and receive improvement suggestions.
+SustainScore is a mobile application that helps users become more aware of their daily resource consumption habits. Users can log predefined activities, view a sustainability score, compare their behavior with a recommended profile, and receive improvement suggestions.
 
 ## Key Features
 
@@ -14,7 +14,7 @@ SustainScore is a mobile application that helps users become more aware of their
 - Sustainability score calculation.
 - Visual comparison between actual and recommended behavior.
 - Daily and weekly progress summaries.
-- AI-generated feedback with actionable suggestions.
+- Rule-based daily feedback with actionable suggestions.
 
 ## Project Phases
 
@@ -29,15 +29,9 @@ The project follows the course delivery phases:
 7. Testing
 8. Final report and demo
 
-## Documentation
-
-- [Phase 1: Idea & Scoping](docs/phase-1-idea-and-scoping.md)
-
 ## Repository Status
 
-Current phase: **Phase 1 - Idea & Scoping**
-
-The repository currently contains project documentation. Source code, tests, and CI/CD configuration will be added in later phases.
+The app is complete. The repository contains the Android source code (Kotlin, Jetpack Compose), unit and UI tests, GitHub Actions CI/CD workflows, and documentation for all project phases.
 
 ## Development Practices
 
