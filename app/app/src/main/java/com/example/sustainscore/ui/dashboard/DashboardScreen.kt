@@ -22,6 +22,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -32,12 +33,16 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.example.sustainscore.data.DemoLogStore
+import com.example.sustainscore.domain.EnergyPrediction
+import com.example.sustainscore.domain.EnergyPredictionGenerator
 import com.example.sustainscore.domain.DailyAiReportGenerator
 import com.example.sustainscore.domain.DailySummaryGenerator
 import com.example.sustainscore.domain.HourlyScoreCalculator
@@ -54,7 +59,7 @@ import com.example.sustainscore.ui.theme.AlertRed
 import com.example.sustainscore.ui.theme.ForestGreen
 import com.example.sustainscore.ui.theme.RiverBlue
 import com.example.sustainscore.ui.theme.SunlitClay
-import com.example.sustainscore.ui.theme.SustainScoreTheme
+import com.example.sustainscore.ui.theme.SustainShareTheme
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -98,7 +103,16 @@ internal val DashboardDateFormatter: DateTimeFormatter =
 fun DashboardRoute(modifier: Modifier = Modifier) {
     val activityTypes = remember { PredefinedActivities.all }
     val anchorDate = remember { LocalDate.now() }
-    var allLogs by remember(anchorDate) { mutableStateOf(sampleLogsFor(anchorDate)) }
+    val context = LocalContext.current
+    val store = remember(context) { DemoLogStore(context) }
+    var allLogs by remember { mutableStateOf(store.loadLogs() ?: sampleLogsFor(anchorDate)) }
+    var predictionEnabled by rememberSaveable { mutableStateOf(store.predictionEnabled) }
+    var predictionRevision by remember { mutableLongStateOf(0L) }
+    val prediction = remember(allLogs, anchorDate, predictionEnabled, predictionRevision) {
+        if (predictionEnabled) EnergyPredictionGenerator().generate(allLogs, anchorDate) else null
+    }
+    LaunchedEffect(allLogs) { store.saveLogs(allLogs) }
+    LaunchedEffect(predictionEnabled) { store.predictionEnabled = predictionEnabled }
     var selectedDateEpochDay by rememberSaveable {
         mutableLongStateOf(anchorDate.toEpochDay())
     }
@@ -125,6 +139,15 @@ fun DashboardRoute(modifier: Modifier = Modifier) {
     when (currentDestination) {
         DashboardDestination.Dashboard -> DashboardScreen(
             state = uiState,
+            prediction = prediction,
+            onCalculatePrediction = {
+                val alreadyEnabled = predictionEnabled
+                predictionEnabled = true
+                predictionRevision++
+                if (alreadyEnabled) coroutineScope.launch {
+                    snackbarHostState.showSnackbar("Prediction updated from your latest usage logs")
+                }
+            },
             selectedDate = selectedDate,
             anchorDate = anchorDate,
             allLogs = allLogs,
@@ -245,7 +268,9 @@ internal fun DashboardScreen(
     onSelectedDateChange: (LocalDate) -> Unit,
     onDeleteChartSegment: (LocalDate, UsageChartSegmentKey) -> Unit,
     onMoveChartSegment: (LocalDate, UsageChartSegmentKey, Int) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    prediction: EnergyPrediction? = null,
+    onCalculatePrediction: () -> Unit = {}
 ) {
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -273,7 +298,7 @@ internal fun DashboardScreen(
                 title = {
                     Column {
                         Text(
-                            text = "SustainScore",
+                            text = "SustainShare",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.SemiBold
                         )
@@ -313,6 +338,12 @@ internal fun DashboardScreen(
             item {
                 DailySummaryCard(state = state)
             }
+            item(key = "energy_prediction") {
+                EnergyPredictionCard(prediction = prediction, onCalculate = onCalculatePrediction)
+            }
+            item(key = "energy_suggestions") {
+                EnergySuggestionsCard(prediction = prediction)
+            }
         }
     }
 }
@@ -346,6 +377,11 @@ private fun OverviewCard(state: DashboardUiState) {
                     "No activities logged yet. Add your first habit to start this day's summary."
                 },
                 style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = "Demo starts with sample usage. Your edits are saved on this device.",
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
@@ -508,7 +544,20 @@ private fun SummaryMetric(label: String, value: String) {
 }
 
 private fun sampleLogsFor(date: LocalDate): List<ActivityLog> {
-    return listOf(
+    val history = (1L..6L).flatMap { offset ->
+        val pastDate = date.minusDays(offset)
+        buildList {
+            add(ActivityLog("history-light-$offset", "lighting", timestampForHour(pastDate, 7), 3.0, 60))
+            add(ActivityLog("history-screen-$offset", "computer_tv", timestampForHour(pastDate, 18), 2.0, 90))
+            if (pastDate.dayOfWeek.value >= 6) {
+                add(ActivityLog("history-wash-$offset", "washing_machine", timestampForHour(pastDate, 11), 1.0, 120))
+            }
+            if (pastDate.dayOfWeek.value in listOf(2, 4)) {
+                add(ActivityLog("history-heat-$offset", "heating_cooling", timestampForHour(pastDate, 19), 1.0, 60))
+            }
+        }
+    }
+    return history + listOf(
         ActivityLog(
             id = "sample-1",
             activityTypeId = "lighting",
@@ -565,7 +614,7 @@ private fun LocalDate.toShortDateLabel(): String {
 @Preview(showBackground = true, widthDp = 412, heightDp = 915)
 @Composable
 private fun DashboardScreenPreview() {
-    SustainScoreTheme {
+    SustainShareTheme {
         DashboardScreen(
             state = buildDashboardUiState(
                 date = LocalDate.of(2026, 5, 18),

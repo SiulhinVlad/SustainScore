@@ -10,7 +10,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.sustainscore.model.ActivityLog
 import com.example.sustainscore.model.PredefinedActivities
 import com.example.sustainscore.ui.dashboard.DailyUsageChartCard
-import com.example.sustainscore.ui.theme.SustainScoreTheme
+import com.example.sustainscore.ui.theme.SustainShareTheme
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -54,7 +54,7 @@ class DailyUsageChartDarkModeTest {
         )
 
         composeRule.setContent {
-            SustainScoreTheme(darkTheme = true) {
+            SustainShareTheme(darkTheme = true) {
                 DailyUsageChartCard(
                     anchorDate = date,
                     selectedDate = date,

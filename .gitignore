@@ -1,0 +1,5 @@
+.review/
+*.apk
+
+.DS_Store
+!SustainShare-demo.apk

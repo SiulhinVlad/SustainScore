@@ -5,14 +5,14 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import com.example.sustainscore.ui.dashboard.DashboardRoute
-import com.example.sustainscore.ui.theme.SustainScoreTheme
+import com.example.sustainscore.ui.theme.SustainShareTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            SustainScoreTheme {
+            SustainShareTheme {
                 DashboardRoute()
             }
         }

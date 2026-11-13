@@ -34,7 +34,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.sustainscore.model.ActivityType
 import com.example.sustainscore.model.PredefinedActivities
-import com.example.sustainscore.ui.theme.SustainScoreTheme
+import com.example.sustainscore.ui.theme.SustainShareTheme
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -53,7 +53,7 @@ fun LogActivityScreen(
     val selectedActivity = activityTypes.first { it.id == selectedActivityId }
     val parsedQuantity = quantity.toDoubleOrNull()
     val parsedDurationMinutes = parseDurationMinutes(duration)
-    val quantityIsValid = parsedQuantity != null && parsedQuantity > 0.0
+    val quantityIsValid = parsedQuantity != null && parsedQuantity.isFinite() && parsedQuantity > 0.0
     val durationIsValid = parsedDurationMinutes != null && parsedDurationMinutes > 0
     val startTimeIsValid = isValidTimeOfDay(startTime)
     val formIsValid = quantityIsValid && durationIsValid && startTimeIsValid
@@ -66,7 +66,7 @@ fun LogActivityScreen(
                 title = {
                     Column {
                         Text(
-                            text = "SustainScore",
+                            text = "SustainShare",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.SemiBold
                         )
@@ -290,7 +290,7 @@ internal fun parseTimeOfDay(timeText: String): Pair<Int, Int>? {
 @Preview(showBackground = true, widthDp = 412, heightDp = 915)
 @Composable
 private fun LogActivityScreenPreview() {
-    SustainScoreTheme {
+    SustainShareTheme {
         LogActivityScreen(
             activityTypes = PredefinedActivities.all,
             onBackClick = {},

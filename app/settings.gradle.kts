@@ -22,5 +22,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "SustainScore"
+rootProject.name = "SustainShare"
 include(":app")

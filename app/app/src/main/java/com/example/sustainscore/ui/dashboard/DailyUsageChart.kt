@@ -174,7 +174,7 @@ internal fun DailyUsageChartCard(
                     onClick = { showGuideDialog = true },
                     modifier = Modifier.testTag("daily_usage_chart_guide_button")
                 ) {
-                    Text(text = "Guid")
+                    Text(text = "Guide")
                 }
             }
 

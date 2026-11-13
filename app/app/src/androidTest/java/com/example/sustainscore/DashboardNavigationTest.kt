@@ -9,14 +9,24 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import org.junit.rules.ExternalResource
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class DashboardNavigationTest {
+    @get:Rule(order = 0)
+    val cleanDemo = object : ExternalResource() {
+        override fun before() {
+            InstrumentationRegistry.getInstrumentation().targetContext
+                .getSharedPreferences("sustainshare_demo", 0).edit().clear().commit()
+        }
+    }
 
-    @get:Rule
+
+    @get:Rule(order = 1)
     val composeRule = createAndroidComposeRule<MainActivity>()
 
     @Test
